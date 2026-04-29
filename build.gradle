@@ -1,0 +1,4 @@
+plugins {
+    // 声明 Android 编译插件，版本号 8.2.0 是目前较稳定的版本
+    id 'com.android.application' version '8.2.0' apply false
+}
