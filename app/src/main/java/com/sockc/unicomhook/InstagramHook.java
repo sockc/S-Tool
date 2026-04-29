@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.TextView;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -15,24 +16,29 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 public class InstagramHook implements IXposedHookLoadPackage {
     private static final String TAG = "Sockc_IG: ";
     private static final String TARGET_PACKAGE = "com.instagram.android";
+    
+    // 增加更多可能的广告关键字
+    private static final String[] AD_KEYWORDS = {"Sponsored", "sponsored", "赞助内容", "赞助", "Suggested for you"};
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
         if (!lpparam.packageName.equals(TARGET_PACKAGE)) return;
 
-        XposedBridge.log(TAG + "已注入 Instagram，开始扫描广告特征...");
+        XposedBridge.log(TAG + "全面升级版注入成功...");
 
-        // 拦截 Activity 的创建，IG 的主页通常在这些核心 Activity 里
         XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 Activity activity = (Activity) param.thisObject;
                 
-                // IG 的 Feed 广告是动态滑动的，所以需要给根布局设置一个监听
-                activity.getWindow().getDecorView().getViewTreeObserver().addOnGlobalLayoutListener(() -> {
-                    // 每次界面变动（滑动）时，递归扫描广告
-                    scanAndHideAds(activity.getWindow().getDecorView());
-                });
+                ViewTreeObserver.OnGlobalLayoutListener listener = new ViewTreeObserver.OnGlobalLayoutListener() {
+                    @Override
+                    public void onGlobalLayout() {
+                        scanAndHideAds(activity.getWindow().getDecorView());
+                    }
+                };
+                
+                activity.getWindow().getDecorView().getViewTreeObserver().addOnGlobalLayoutListener(listener);
             }
         });
     }
@@ -42,13 +48,15 @@ public class InstagramHook implements IXposedHookLoadPackage {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) {
                 View child = group.getChildAt(i);
-
-                // 如果是文本，检查是否包含“赞助”关键字
+                
                 if (child instanceof TextView) {
                     String text = ((TextView) child).getText().toString();
-                    if (text.equals("Sponsored") || text.equals("赞助内容") || text.equals("赞助")) {
-                        // 发现广告特征！向上寻找包裹整个帖子的容器（通常是第 4-6 层父类）
-                        hidePostContainer(child);
+                    for (String keyword : AD_KEYWORDS) {
+                        if (text.equals(keyword)) {
+                            // 发现目标！执行精准切除
+                            hideTheWholePost(child);
+                            return;
+                        }
                     }
                 } else {
                     scanAndHideAds(child);
@@ -57,25 +65,31 @@ public class InstagramHook implements IXposedHookLoadPackage {
         }
     }
 
-    private void hidePostContainer(View skipText) {
-        View current = skipText;
-        // 向上递归寻找父容器，直到找到看起来像是一个完整帖子的 View
-        // 在 IG 中，广告文案向上大约 5-8 层就是整个卡片容器
-        for (int i = 0; i < 8; i++) {
-            if (current.getParent() instanceof View) {
-                current = (View) current.getParent();
-                // 尝试通过宽高比来判断，或者直接根据层级强行隐藏
-                if (i >= 5) { 
-                    if (current.getVisibility() != View.GONE) {
-                        XposedBridge.log(TAG + "成功通过关键字拦截并隐藏了一个 IG 广告帖");
-                        current.setVisibility(View.GONE);
-                        // 把宽高设为 0，防止留下一块空白
-                        ViewGroup.LayoutParams params = current.getLayoutParams();
+    private void hideTheWholePost(View adLabel) {
+        View current = adLabel;
+        // 策略升级：不再写死 8 层，而是不断向上找，直到找到一个占据屏幕大部分宽度的 View
+        // 这通常就是整个帖子卡片的根布局
+        while (current.getParent() instanceof View) {
+            View parent = (View) current.getParent();
+            
+            // 如果这个父布局的宽度已经接近屏幕宽度，说明它就是帖子容器
+            if (parent.getWidth() > 0 && parent.getHeight() > 0) {
+                // 找到疑似卡片容器（高度通常大于 300 像素，防止误删小部件）
+                if (parent.getHeight() > 300) {
+                    if (parent.getVisibility() != View.GONE) {
+                        XposedBridge.log(TAG + "锁定广告卡片，已将其物理抹除");
+                        parent.setVisibility(View.GONE);
+                        // 强制把高度设为 0，防止留白
+                        ViewGroup.LayoutParams params = parent.getLayoutParams();
                         params.height = 0;
-                        current.setLayoutParams(params);
+                        parent.setLayoutParams(params);
                     }
+                    break; 
                 }
             }
+            current = parent;
+            // 防止死循环，设定一个安全上限
+            if (current.getId() == android.R.id.content) break;
         }
     }
 }
