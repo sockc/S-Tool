@@ -1,68 +1,43 @@
 package com.sockc.unicomhook;
 
+import android.content.Context;
 import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodReplacement;
+import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class TalkatoneHook implements IXposedHookLoadPackage {
-    private static final String TAG = "SockcHook_Talkatone: ";
-    private static final String TARGET_PACKAGE = "com.talkatone.android"; // Talkatone 包名
+    private static final String TAG = "Sockc_Talk: ";
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
-        if (!lpparam.packageName.equals(TARGET_PACKAGE)) return;
+        if (!lpparam.packageName.equals("com.talkatone.android")) return;
 
-        XposedBridge.log(TAG + "已注入 Talkatone，开始伪造 Google Play 安装来源...");
+        XposedBridge.log(TAG + "开始注入...");
 
-        // ==========================================
-        // 1. 拦截老版本 API (Android 10 及以下) 的来源获取
-        // ==========================================
         try {
-            Class<?> packageManagerClass = XposedHelpers.findClass("android.app.ApplicationPackageManager", lpparam.classLoader);
-            
-            XposedHelpers.findAndHookMethod(packageManagerClass, "getInstallerPackageName", String.class, new XC_MethodReplacement() {
+            // 改为 Hook ContextImpl 的 getPackageManager，这是所有 App 获取来源的必经之路
+            XposedHelpers.findAndHookMethod("android.app.ContextImpl", lpparam.classLoader, "getPackageManager", new XC_MethodHook() {
                 @Override
-                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                    String pkgName = (String) param.args[0];
-                    if (TARGET_PACKAGE.equals(pkgName)) {
-                        XposedBridge.log(TAG + "拦截到老版本来源检测，强制返回 Play 商店！");
-                        return "com.android.vending"; // 骗它是由 Google Play 安装的
-                    }
-                    return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    Object pm = param.getResult(); // 获取真实的 PackageManager
+                    
+                    // 动态代理或再次 Hook 这个 pm 对象的方法
+                    XposedHelpers.findAndHookMethod(pm.getClass(), "getInstallerPackageName", String.class, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            String pkgName = (String) param.args[0];
+                            if ("com.talkatone.android".equals(pkgName)) {
+                                XposedBridge.log(TAG + "成功拦截来源请求，强行返回 Play Store");
+                                param.setResult("com.android.vending");
+                            }
+                        }
+                    });
                 }
             });
         } catch (Throwable t) {
-            XposedBridge.log(TAG + "老版本来源 Hook 失败: " + t.getMessage());
-        }
-
-        // ==========================================
-        // 2. 拦截新版本 API (Android 11+) 的来源获取
-        // ==========================================
-        try {
-            // Android 11 引入了 InstallSourceInfo 类来管理安装来源，我们直接拦截它内部的 get 方法
-            Class<?> installSourceInfoClass = XposedHelpers.findClass("android.content.pm.InstallSourceInfo", lpparam.classLoader);
-            
-            // 修改返回的“安装应用包名”
-            XposedHelpers.findAndHookMethod(installSourceInfoClass, "getInstallingPackageName", new XC_MethodReplacement() {
-                @Override
-                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                    XposedBridge.log(TAG + "拦截到新版安装者检测，强行伪装！");
-                    return "com.android.vending";
-                }
-            });
-
-            // 修改返回的“发起安装应用包名”
-            XposedHelpers.findAndHookMethod(installSourceInfoClass, "getInitiatingPackageName", new XC_MethodReplacement() {
-                @Override
-                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                    return "com.android.vending";
-                }
-            });
-        } catch (Throwable t) {
-            // 如果是在 Android 11 以下的手机运行，这个类找不到会报错，忽略即可
-            XposedBridge.log(TAG + "新版本来源 Hook 失败(可能是系统版本低): " + t.getMessage());
+            XposedBridge.log(TAG + "Hook 失败，这可能是闪退原因: " + t.getMessage());
         }
     }
 }
