@@ -14,7 +14,7 @@
             
         <meta-data
             android:name="xposedscope"
-            android:value="com.sinovatech.unicom.ui,com.autonavi.minimap,com.taobao.taobao,com.zhiliaoapp.musically.com.zabank.android" />
+            android:value="com.sinovatech.unicom.ui,com.autonavi.minimap,com.taobao.taobao,com.zhiliaoapp.musically,com.zabank.android,com.instagram.android" />
             
     </application>
 </manifest>
