@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // 添加 Xposed 官方仓库，解决 api:82 找不到的问题
+        maven { url "https://api.xposed.info/" }
     }
 }
 
