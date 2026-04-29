@@ -18,58 +18,62 @@ public class TaobaoHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
-        // 只拦截淘宝
-        if (!lpparam.packageName.equals(TARGET_PACKAGE)) return;
+        // 1. 核心修复：双重校验，只在“主进程”中执行，放过那些沙盒和推送子进程
+        if (!lpparam.packageName.equals(TARGET_PACKAGE) || !lpparam.processName.equals(TARGET_PACKAGE)) {
+            return;
+        }
 
-        XposedBridge.log(TAG + "已注入淘宝，猎杀开屏广告中...");
+        XposedBridge.log(TAG + "已精准注入淘宝主进程...");
 
-        // 拦截所有 Activity 的创建
-        XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                Activity activity = (Activity) param.thisObject;
-                String className = activity.getClass().getName();
+        try {
+            XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    Activity activity = (Activity) param.thisObject;
+                    String className = activity.getClass().getName();
 
-                // 识别淘宝的开屏/欢迎页 (淘宝通常使用 welcome 或 bootimage)
-                if (className.toLowerCase().contains("welcome") || className.toLowerCase().contains("bootimage")) {
-                    XposedBridge.log(TAG + "成功拦截到开屏页面: " + className);
-                    
-                    // 延迟 500 毫秒执行扫描，等广告和“跳过”按钮被渲染出来
-                    activity.getWindow().getDecorView().postDelayed(() -> {
-                        scanAndClickSkip(activity.getWindow().getDecorView());
-                    }, 500); 
+                    if (className.toLowerCase().contains("welcome") || className.toLowerCase().contains("bootimage")) {
+                        XposedBridge.log(TAG + "成功拦截到开屏页面: " + className);
+                        
+                        // 延迟 800 毫秒，等它把牛皮癣广告全画出来
+                        activity.getWindow().getDecorView().postDelayed(() -> {
+                            // 2. 核心修复：穿上防弹衣，即使找不到或者出错，淘宝也不会死
+                            try {
+                                scanAndClickSkip(activity.getWindow().getDecorView());
+                            } catch (Exception e) {
+                                XposedBridge.log(TAG + "扫描 UI 时发生意外，已拦截崩溃: " + e.getMessage());
+                            }
+                        }, 800); 
+                    }
                 }
-            }
-        });
+            });
+        } catch (Exception e) {
+            XposedBridge.log(TAG + "Hook 注入失败: " + e.getMessage());
+        }
     }
 
-    /**
-     * 递归扫描当前界面的所有控件，找到“跳过”并触发点击
-     */
     private void scanAndClickSkip(View view) {
+        if (view == null) return;
+
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) {
                 View child = group.getChildAt(i);
                 
-                // 如果这是一个文字控件
                 if (child instanceof TextView) {
-                    String text = ((TextView) child).getText().toString();
-                    // 模糊匹配跳过按钮的常见文案
-                    if (text.contains("跳过") || text.contains("跳转") || text.contains("跳过广告")) {
-                        XposedBridge.log(TAG + "锁定目标！发现 [" + text + "] 按钮，正在执行无感秒点！");
-                        
-                        // 触发系统的点击事件，相当于人的手指按了下去
-                        child.performClick(); 
-                        
-                        // 如果它的父布局才是真正的点击响应区，连父布局一起点
-                        if (child.getParent() instanceof View) {
-                            ((View) child.getParent()).performClick();
+                    CharSequence cs = ((TextView) child).getText();
+                    if (cs != null) {
+                        String text = cs.toString();
+                        if (text.contains("跳过") || text.contains("跳转")) {
+                            XposedBridge.log(TAG + "锁定目标！发现 [" + text + "]，执行无感秒点！");
+                            child.performClick();
+                            if (child.getParent() instanceof View) {
+                                ((View) child.getParent()).performClick();
+                            }
+                            return; 
                         }
-                        return; // 搞定收工，停止扫描
                     }
                 }
-                // 没找到就继续往深处挖
                 scanAndClickSkip(child);
             }
         }
