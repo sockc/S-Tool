@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    
+
     <application>
         <meta-data
             android:name="xposedmodule"
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="中国联通开屏广告净化模块 - By sockc" />
+            android:value="全能去广告与净化模块 (支持联通、高德、淘宝、TikTok) - By sockc" />
         <meta-data
             android:name="xposedminversion"
             android:value="82" />
+            
+        <meta-data
+            android:name="xposedscope"
+            android:value="com.sinovatech.unicom.ui,com.autonavi.minimap,com.taobao.taobao,com.zhiliaoapp.musically" />
+            
     </application>
 </manifest>
