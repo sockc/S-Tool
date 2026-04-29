@@ -1,11 +1,10 @@
 package com.sockc.unicomhook;
 
 import android.accessibilityservice.AccessibilityServiceInfo;
-import android.view.accessibility.AccessibilityManager;
 import android.provider.Settings;
+import android.view.accessibility.AccessibilityManager;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodReplacement;
@@ -32,17 +31,20 @@ public class ZABankHook implements IXposedHookLoadPackage {
                 if ("development_settings_enabled".equals(name) || "adb_enabled".equals(name)) {
                     return 0; // 骗它说没开
                 }
-                return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
+                try {
+                    return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
+                } catch (Exception e) {
+                    return 0; 
+                }
             }
         });
 
-        // 2. 隐藏“无障碍服务” (最关键：针对 GKD)
-        // 拦截 AccessibilityManager，让它返回一个空的已开启服务列表
+        // 2. 隐藏“无障碍服务” (针对 GKD)
         XposedHelpers.findAndHookMethod(AccessibilityManager.class, "getEnabledAccessibilityServiceList", int.class, new XC_MethodReplacement() {
             @Override
             protected Object replaceHookedMethod(MethodHookParam param) {
                 XposedBridge.log(TAG + "已拦截无障碍列表查询，返回空列表！");
-                return new ArrayList<AccessibilityServiceInfo>(); // 返回空列表，骗它说没有开启任何服务
+                return new ArrayList<AccessibilityServiceInfo>(); 
             }
         });
 
@@ -55,7 +57,11 @@ public class ZABankHook implements IXposedHookLoadPackage {
                 if ("accessibility_enabled".equals(name)) {
                     return 0; // 骗它说无障碍总开关是关着的
                 }
-                return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
+                try {
+                    return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
+                } catch (Exception e) {
+                    return 0;
+                }
             }
         });
     }
