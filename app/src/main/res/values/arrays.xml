@@ -15,5 +15,9 @@
         <item>com.ss.android.ugc.aweme</item>
 
         <item>com.sinovatech.unicom.ui</item>
+
+        <item>com.car300.activity</item>
+        <item>com.che300.price</item>
+
     </string-array>
 </resources>
