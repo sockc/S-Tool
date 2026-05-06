@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="xposed_scope">
+        <item>com.sinovatech.unicom.ui</item>
+        <item>com.autonavi.minimap</item>
+        <item>com.taobao.taobao</item>
+        <item>com.zhiliaoapp.musically</item>
+        <item>com.ganji.android.haoche</item>
+        <item>com.hikvision.hikconnect</item>
+        <item>com.tencent.mobileqq</item>
+    </string-array>
+</resources>
