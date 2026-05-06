@@ -3,3 +3,5 @@ com.sockc.unicomhook.GaodeHook
 com.sockc.unicomhook.TaobaoHook
 com.sockc.unicomhook.TiktokHook
 com.sockc.unicomhook.QQHook
+com.sockc.unicomhook.HikvisionHook
+com.sockc.unicomhook.GuaziHook
