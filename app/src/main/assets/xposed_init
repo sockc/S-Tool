@@ -10,3 +10,4 @@ com.sockc.unicomhook.FirstyHook
 com.sockc.unicomhook.ScreenshotPrivacyHook
 com.sockc.unicomhook.MeituanHook
 com.sockc.unicomhook.PinduoduoHook
+com.sockc.unicomhook.ClipboardHook
