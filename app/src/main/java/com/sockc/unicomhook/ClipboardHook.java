@@ -11,23 +11,27 @@ public class ClipboardHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
-        // 这里不写死包名！让 arrays.xml 来控制狙击范围
+        // 【核心修复：避开底层地雷】
+        // 绝对不能注入到 WebView 引擎里，否则会导致 C++ 层面的 SIGSEGV 崩溃！
+        if (lpparam.packageName.equals("com.google.android.webview") || 
+            lpparam.packageName.equals("com.android.webview") || 
+            lpparam.packageName.equals("android")) {
+            return; 
+        }
+
         XposedBridge.log(TAG + "已潜入 " + lpparam.packageName + "，剪贴板粉碎机启动！");
 
         try {
             Class<?> clipboardManager = XposedHelpers.findClass("android.content.ClipboardManager", lpparam.classLoader);
 
-            // 1. 拦截“是否有剪贴板内容”的询问 -> 永远回答：没有 (false)
             XposedHelpers.findAndHookMethod(clipboardManager, "hasPrimaryClip", new XC_MethodReplacement() {
                 @Override protected Object replaceHookedMethod(MethodHookParam param) { return false; }
             });
 
-            // 2. 拦截“是否有文本”的询问 -> 永远回答：没有 (false)
             XposedHelpers.findAndHookMethod(clipboardManager, "hasText", new XC_MethodReplacement() {
                 @Override protected Object replaceHookedMethod(MethodHookParam param) { return false; }
             });
 
-            // 3. 拦截“获取剪贴板数据”的核心动作 -> 强制返回空 (null)
             XposedHelpers.findAndHookMethod(clipboardManager, "getPrimaryClip", new XC_MethodReplacement() {
                 @Override
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
@@ -36,12 +40,10 @@ public class ClipboardHook implements IXposedHookLoadPackage {
                 }
             });
 
-            // 4. 拦截“获取剪贴板描述” (有些 App 会先拿描述看数据类型) -> 返回空
             XposedHelpers.findAndHookMethod(clipboardManager, "getPrimaryClipDescription", new XC_MethodReplacement() {
                 @Override protected Object replaceHookedMethod(MethodHookParam param) { return null; }
             });
 
-            // 5. 拦截老版本 API 的纯文本获取 -> 返回空字符串
             XposedHelpers.findAndHookMethod(clipboardManager, "getText", new XC_MethodReplacement() {
                 @Override protected Object replaceHookedMethod(MethodHookParam param) { return ""; }
             });
