@@ -1,12 +1,14 @@
 package com.sockc.unicomhook;
 
 import android.app.Activity;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.TextView;
-import android.content.pm.PackageManager;
+
+import java.io.File;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -22,10 +24,31 @@ public class MeituanHook implements IXposedHookLoadPackage {
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
         if (!lpparam.packageName.equals(TARGET_PACKAGE)) return;
 
-        XposedBridge.log(TAG + "已成功注入美团，准备执行净化与隐私隔离...");
+        XposedBridge.log(TAG + "已注入美团，执行去广告 + 权限剥夺 + 本地文件硬隔离！");
 
         // ==========================================
-        // 1. 秒杀开屏广告（自动点击跳过）
+        // 1. 本地文件/相册硬隔离 (和 PDD 同款套餐)
+        // ==========================================
+        try {
+            XposedHelpers.findAndHookMethod(File.class, "listFiles", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    File file = (File) param.thisObject;
+                    String path = file.getAbsolutePath();
+                    
+                    // 只要敢扫相册、截图、下载目录，统统返回空集
+                    if (path.contains("DCIM") || path.contains("Pictures") || path.contains("Download")) {
+                        XposedBridge.log(TAG + "拦截美团扫描本地目录: " + path + "，已强制返回空！");
+                        param.setResult(new File[0]);
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "本地文件隔离异常: " + t.getMessage());
+        }
+
+        // ==========================================
+        // 2. 秒杀开屏广告
         // ==========================================
         XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
             @Override
@@ -40,7 +63,6 @@ public class MeituanHook implements IXposedHookLoadPackage {
                         if (!clicked && scanAndClickSkip(decorView)) {
                             clicked = true;
                             XposedBridge.log(TAG + "已自动跳过美团开屏广告");
-                            // 成功后移除监听
                             decorView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
                         }
                     }
@@ -49,25 +71,25 @@ public class MeituanHook implements IXposedHookLoadPackage {
         });
 
         // ==========================================
-        // 2. 权限/隐私屏蔽（让它变成瞎子）
+        // 3. 权限请求屏蔽 (位置、联系人、相机等全部斩断)
         // ==========================================
-        
-        // 屏蔽权限检查：无论美团问系统要什么权限（位置、联系人、电话），统统返回“已拒绝”
         XposedHelpers.findAndHookMethod("android.app.ContextImpl", lpparam.classLoader, "checkPermission", 
                 String.class, int.class, int.class, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 String permission = (String) param.args[0];
-                // 排除一些基础权限防止崩溃，其他的（位置、相机、存储、电话）全部拦截
                 if (permission.contains("LOCATION") || permission.contains("READ_PHONE_STATE") || 
-                    permission.contains("CONTACTS") || permission.contains("CAMERA")) {
-                    XposedBridge.log(TAG + "拦截权限请求: " + permission + "，强制返回 PERMISSION_DENIED");
+                    permission.contains("CONTACTS") || permission.contains("CAMERA") || 
+                    permission.contains("READ_MEDIA") || permission.contains("STORAGE")) {
+                    XposedBridge.log(TAG + "硬拦截美团权限请求: " + permission);
                     param.setResult(PackageManager.PERMISSION_DENIED);
                 }
             }
         });
 
-        // 屏蔽设备 ID（IMEI/序列号等）：返回空字符串或伪造值
+        // ==========================================
+        // 4. 设备 ID 屏蔽 (防止大数据杀熟定位)
+        // ==========================================
         try {
             XposedHelpers.findAndHookMethod("android.telephony.TelephonyManager", lpparam.classLoader, "getDeviceId", new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam param) { param.setResult("00000000000000"); }
