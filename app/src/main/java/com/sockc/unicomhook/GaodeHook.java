@@ -4,13 +4,13 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.widget.TextView;
 
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.WeakHashMap;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -23,220 +23,227 @@ public class GaodeHook implements IXposedHookLoadPackage {
     private static final String TAG = "Sockc_Gaode: ";
     private static final String TARGET_PACKAGE = "com.autonavi.minimap";
 
-    // 防止同一个 Activity 被重复挂监听
-    private static final WeakHashMap<Activity, Boolean> hookedActivities = new WeakHashMap<>();
-
-    // 必须保留的核心功能关键词，命中这些就不隐藏
-    private static final Set<String> KEEP_KEYWORDS = new HashSet<>(Arrays.asList(
-            "搜索", "导航", "路线", "路线规划", "公交", "步行", "骑行",
-            "收藏", "家", "公司", "回家", "去公司", "定位",
-            "地图", "我的位置", "附近", "停车场"
+    // 你圈出来想去掉的功能
+    private static final Set<String> HIDE_EXACT = new HashSet<>(Arrays.asList(
+            "探索",
+            "AI对话",
+            "路线",
+            "美食",
+            "酒店",
+            "景点",
+            "加油站",
+            "休闲娱乐",
+            "超市",
+            "探索本地"
     ));
 
-    // 要精简隐藏的外围功能关键词
-    private static final Set<String> HIDE_KEYWORDS = new HashSet<>(Arrays.asList(
-            "酒店", "门票", "景点", "旅游", "火车票", "机票",
-            "打车", "顺风车", "代驾", "租车",
-            "加油", "充电", "洗车", "车主服务",
-            "商城", "会员", "积分", "签到", "福利", "红包", "优惠券",
-            "发现", "精选", "推荐", "活动", "任务", "直播",
-            "消息", "通知", "高德指南", "周边游",
-            "美食", "电影", "外卖", "团购"
-    ));
+    // 运营挂件、活动角标这类用关键字更稳
+    private static final String[] HIDE_KEYWORDS = new String[] {
+            "扫街榜",
+            "订周末"
+    };
 
-    // 开屏/弹窗按钮关键词
-    private static final Set<String> SKIP_KEYWORDS = new HashSet<>(Arrays.asList(
-            "跳过", "关闭广告", "关闭", "以后再说", "暂不开启"
-    ));
+    // 用来判断是不是首页，避免别的页面误伤
+    private static final String[] HOME_MARKERS = new String[] {
+            "设置家",
+            "设置单位",
+            "常去地点",
+            "探索本地"
+    };
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
-        // 只注入高德主进程，避开 locationservice / push / webview 等子进程
         if (!TARGET_PACKAGE.equals(lpparam.packageName) || !TARGET_PACKAGE.equals(lpparam.processName)) {
             return;
         }
 
-        XposedBridge.log(TAG + "已注入高德主进程，启用精简模式");
+        XposedBridge.log(TAG + "已精准注入高德主进程...");
 
         try {
             XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    Activity activity = (Activity) param.thisObject;
-                    attachCleaner(activity);
+                protected void afterHookedMethod(MethodHookParam param) {
+                    final Activity activity = (Activity) param.thisObject;
+                    final View decorView = activity.getWindow().getDecorView();
+
+                    ViewTreeObserver.OnGlobalLayoutListener listener = new ViewTreeObserver.OnGlobalLayoutListener() {
+                        @Override
+                        public void onGlobalLayout() {
+                            try {
+                                // 你原来的广告跳过
+                                scanAndClickSkip(decorView);
+
+                                // 只在首页净化，别的页面不碰
+                                if (looksLikeHomePage(decorView)) {
+                                    scanAndHideJunk(decorView);
+                                }
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                    };
+
+                    decorView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
                 }
             });
         } catch (Throwable e) {
-            XposedBridge.log(TAG + "Hook 注入失败: " + e.getMessage());
+            XposedBridge.log(TAG + "Hook 注入失败: " + e);
         }
     }
 
-    private void attachCleaner(final Activity activity) {
-        if (activity == null) return;
-
-        synchronized (hookedActivities) {
-            if (hookedActivities.containsKey(activity)) return;
-            hookedActivities.put(activity, true);
-        }
-
-        final View root = activity.getWindow() == null ? null : activity.getWindow().getDecorView();
-        if (root == null) return;
-
-        ViewTreeObserver.OnGlobalLayoutListener listener = new ViewTreeObserver.OnGlobalLayoutListener() {
-            private long lastRun = 0L;
-
-            @Override
-            public void onGlobalLayout() {
-                long now = System.currentTimeMillis();
-
-                // 限流，避免每帧都递归扫描导致卡顿
-                if (now - lastRun < 350) return;
-                lastRun = now;
-
-                try {
-                    scanAndClean(root);
-                } catch (Throwable ignored) {
-                    // 不让高德因为模块闪退
-                }
-            }
-        };
-
-        root.getViewTreeObserver().addOnGlobalLayoutListener(listener);
-
-        // 启动后延迟扫几次，覆盖动态加载的首页卡片和弹窗
-        root.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    scanAndClean(root);
-                } catch (Throwable ignored) {
-                }
-            }
-        }, 800);
-
-        root.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    scanAndClean(root);
-                } catch (Throwable ignored) {
-                }
-            }
-        }, 1800);
-    }
-
-    private void scanAndClean(View view) {
+    // 你原来的广告跳过逻辑，保留
+    private void scanAndClickSkip(View view) {
         if (view == null) return;
 
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View child = group.getChildAt(i);
+
+                if (child instanceof TextView) {
+                    CharSequence cs = ((TextView) child).getText();
+                    if (cs != null) {
+                        String text = cs.toString();
+                        if (text.contains("跳过") || text.contains("关闭广告")) {
+                            XposedBridge.log(TAG + "锁定高德开屏目标！发现 [" + text + "]，执行无感秒点！");
+                            child.performClick();
+                            if (child.getParent() instanceof View) {
+                                ((View) child.getParent()).performClick();
+                            }
+                            child.setVisibility(View.GONE);
+                            return;
+                        }
+                    }
+                }
+
+                scanAndClickSkip(child);
+            }
+        }
+    }
+
+    // 首页净化：递归扫描并隐藏你圈出来的区域
+    private void scanAndHideJunk(View view) {
+        if (view == null) return;
+
+        // 先看 contentDescription，有些控件文字不一定走 TextView
+        CharSequence desc = view.getContentDescription();
+        if (desc != null) {
+            String d = desc.toString().trim();
+            if (shouldHideText(d)) {
+                hideMatchedContainer(view, d);
+                return;
+            }
+        }
+
         if (view instanceof TextView) {
-            handleTextView((TextView) view);
-            return;
+            CharSequence cs = ((TextView) view).getText();
+            if (cs != null) {
+                String text = cs.toString().trim();
+                if (shouldHideText(text)) {
+                    hideMatchedContainer(view, text);
+                    return;
+                }
+            }
         }
 
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
-            int count = group.getChildCount();
-
-            for (int i = 0; i < count; i++) {
-                View child = group.getChildAt(i);
-                scanAndClean(child);
+            for (int i = 0; i < group.getChildCount(); i++) {
+                scanAndHideJunk(group.getChildAt(i));
             }
         }
     }
 
-    private void handleTextView(TextView tv) {
-        CharSequence cs = tv.getText();
-        if (cs == null) return;
+    private boolean shouldHideText(String text) {
+        if (text == null || text.isEmpty()) return false;
 
-        String text = cs.toString().trim();
-        if (text.length() == 0) return;
+        if (HIDE_EXACT.contains(text)) return true;
 
-        // 1. 开屏/弹窗跳过
-        if (containsAny(text, SKIP_KEYWORDS)) {
-            XposedBridge.log(TAG + "发现弹窗/广告按钮: " + text + "，尝试点击并隐藏");
-            safeClick(tv);
-            hideSafely(tv);
-            return;
+        for (String keyword : HIDE_KEYWORDS) {
+            if (text.contains(keyword)) return true;
         }
 
-        // 2. 核心功能不碰
-        if (containsAny(text, KEEP_KEYWORDS)) {
-            return;
-        }
-
-        // 3. 外围入口隐藏
-        if (containsAny(text, HIDE_KEYWORDS)) {
-            XposedBridge.log(TAG + "隐藏外围入口: " + text);
-            hideSmallContainer(tv);
-        }
+        return false;
     }
 
-    private boolean containsAny(String text, Set<String> keywords) {
-        if (text == null) return false;
-
-        for (String keyword : keywords) {
-            if (text.contains(keyword)) {
+    // 判断是不是首页，避免误伤其它业务页
+    private boolean looksLikeHomePage(View root) {
+        for (String marker : HOME_MARKERS) {
+            if (containsTextDeep(root, marker)) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsTextDeep(View view, String target) {
+        if (view == null) return false;
+
+        if (view instanceof TextView) {
+            CharSequence cs = ((TextView) view).getText();
+            if (cs != null && target.equals(cs.toString().trim())) {
+                return true;
+            }
+        }
+
+        CharSequence desc = view.getContentDescription();
+        if (desc != null && target.equals(desc.toString().trim())) {
+            return true;
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                if (containsTextDeep(group.getChildAt(i), target)) {
+                    return true;
+                }
             }
         }
 
         return false;
     }
 
-    private void safeClick(View view) {
-        try {
-            view.performClick();
+    private void hideMatchedContainer(View hitView, String text) {
+        View target = findBestContainer(hitView, text);
+        if (target == null) return;
 
-            if (view.getParent() instanceof View) {
-                ((View) view.getParent()).performClick();
-            }
-        } catch (Throwable ignored) {
+        if (target.getVisibility() != View.GONE) {
+            XposedBridge.log(TAG + "隐藏首页冗余项: " + text);
+            target.setVisibility(View.GONE);
+            target.setEnabled(false);
+            target.setClickable(false);
         }
     }
 
-    private void hideSafely(View view) {
-        try {
-            view.setVisibility(View.GONE);
-        } catch (Throwable ignored) {
+    private View findBestContainer(View start, String text) {
+        View current = start;
+
+        int maxUp;
+        if (isBottomTab(text)) {
+            maxUp = 3;   // 底部 tab 往上抬 3 层基本够
+        } else if (isFloatBadge(text)) {
+            maxUp = 4;   // 运营挂件通常套得更深
+        } else {
+            maxUp = 4;   // 首页卡片区域
         }
+
+        for (int i = 0; i < maxUp; i++) {
+            ViewParent parent = current.getParent();
+            if (!(parent instanceof View)) break;
+
+            View pv = (View) parent;
+            if (pv.getId() == android.R.id.content) break;
+
+            current = pv;
+        }
+
+        return current;
     }
 
-    /**
-     * 尽量只隐藏小入口，不隐藏整页。
-     * 规则：
-     * - 先隐藏 TextView 本身
-     * - 如果父容器子项很少，说明大概率是一个按钮/卡片入口，也一起隐藏
-     * - 最多向上处理 2 层，避免误隐藏整个首页
-     */
-    private void hideSmallContainer(TextView tv) {
-        hideSafely(tv);
+    private boolean isBottomTab(String text) {
+        return "探索".equals(text) || "AI对话".equals(text) || "路线".equals(text);
+    }
 
-        try {
-            View current = tv;
-            for (int depth = 0; depth < 2; depth++) {
-                if (!(current.getParent() instanceof ViewGroup)) return;
-
-                ViewGroup parent = (ViewGroup) current.getParent();
-
-                // 子项太多通常是大容器，不碰
-                if (parent.getChildCount() > 5) return;
-
-                // 避免隐藏全屏级容器
-                if (parent.getWidth() > 0 && parent.getHeight() > 0) {
-                    int area = parent.getWidth() * parent.getHeight();
-
-                    View root = tv.getRootView();
-                    int rootArea = root.getWidth() * root.getHeight();
-
-                    if (rootArea > 0 && area > rootArea / 3) {
-                        return;
-                    }
-                }
-
-                parent.setVisibility(View.GONE);
-                current = parent;
-            }
-        } catch (Throwable ignored) {
-        }
+    private boolean isFloatBadge(String text) {
+        return text.contains("扫街榜") || text.contains("订周末");
     }
 }
