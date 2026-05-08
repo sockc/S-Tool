@@ -23,27 +23,26 @@ public class GaodeHook implements IXposedHookLoadPackage {
     private static final String TAG = "Sockc_Gaode: ";
     private static final String TARGET_PACKAGE = "com.autonavi.minimap";
 
-    // 你圈出来想去掉的功能
+    // 只隐藏你想去掉的首页功能，不碰左侧导航
     private static final Set<String> HIDE_EXACT = new HashSet<>(Arrays.asList(
-            "探索",
-            "AI对话",
-            "路线",
+            "探索本地",
             "美食",
             "酒店",
             "景点",
             "加油站",
             "休闲娱乐",
             "超市",
-            "探索本地"
+            "探索",
+            "AI对话",
+            "路线"
     ));
 
-    // 运营挂件、活动角标这类用关键字更稳
     private static final String[] HIDE_KEYWORDS = new String[] {
             "扫街榜",
             "订周末"
     };
 
-    // 用来判断是不是首页，避免别的页面误伤
+    // 用来判断“当前是不是首页”
     private static final String[] HOME_MARKERS = new String[] {
             "设置家",
             "设置单位",
@@ -53,11 +52,12 @@ public class GaodeHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
+        // 只注入高德主进程
         if (!TARGET_PACKAGE.equals(lpparam.packageName) || !TARGET_PACKAGE.equals(lpparam.processName)) {
             return;
         }
 
-        XposedBridge.log(TAG + "已精准注入高德主进程...");
+        XposedBridge.log(TAG + "已注入高德主进程");
 
         try {
             XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
@@ -70,10 +70,10 @@ public class GaodeHook implements IXposedHookLoadPackage {
                         @Override
                         public void onGlobalLayout() {
                             try {
-                                // 你原来的广告跳过
+                                // 保留你原来跳广告的逻辑
                                 scanAndClickSkip(decorView);
 
-                                // 只在首页净化，别的页面不碰
+                                // 只在首页净化
                                 if (looksLikeHomePage(decorView)) {
                                     scanAndHideJunk(decorView);
                                 }
@@ -90,7 +90,7 @@ public class GaodeHook implements IXposedHookLoadPackage {
         }
     }
 
-    // 你原来的广告跳过逻辑，保留
+    // 原来的跳过广告逻辑保留
     private void scanAndClickSkip(View view) {
         if (view == null) return;
 
@@ -104,7 +104,7 @@ public class GaodeHook implements IXposedHookLoadPackage {
                     if (cs != null) {
                         String text = cs.toString();
                         if (text.contains("跳过") || text.contains("关闭广告")) {
-                            XposedBridge.log(TAG + "锁定高德开屏目标！发现 [" + text + "]，执行无感秒点！");
+                            XposedBridge.log(TAG + "发现广告按钮: " + text);
                             child.performClick();
                             if (child.getParent() instanceof View) {
                                 ((View) child.getParent()).performClick();
@@ -120,11 +120,10 @@ public class GaodeHook implements IXposedHookLoadPackage {
         }
     }
 
-    // 首页净化：递归扫描并隐藏你圈出来的区域
+    // 首页净化
     private void scanAndHideJunk(View view) {
         if (view == null) return;
 
-        // 先看 contentDescription，有些控件文字不一定走 TextView
         CharSequence desc = view.getContentDescription();
         if (desc != null) {
             String d = desc.toString().trim();
@@ -165,7 +164,6 @@ public class GaodeHook implements IXposedHookLoadPackage {
         return false;
     }
 
-    // 判断是不是首页，避免误伤其它业务页
     private boolean looksLikeHomePage(View root) {
         for (String marker : HOME_MARKERS) {
             if (containsTextDeep(root, marker)) {
@@ -216,14 +214,14 @@ public class GaodeHook implements IXposedHookLoadPackage {
 
     private View findBestContainer(View start, String text) {
         View current = start;
-
         int maxUp;
+
         if (isBottomTab(text)) {
-            maxUp = 3;   // 底部 tab 往上抬 3 层基本够
+            maxUp = 3;
         } else if (isFloatBadge(text)) {
-            maxUp = 4;   // 运营挂件通常套得更深
+            maxUp = 4;
         } else {
-            maxUp = 4;   // 首页卡片区域
+            maxUp = 4;
         }
 
         for (int i = 0; i < maxUp; i++) {
