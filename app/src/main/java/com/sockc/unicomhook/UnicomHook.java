@@ -1,6 +1,7 @@
 package com.sockc.unicomhook;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.ContextWrapper;
 import android.content.Intent;
@@ -8,6 +9,11 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
+import android.view.Window;
+import android.widget.TextView;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -31,6 +37,9 @@ public class UnicomHook implements IXposedHookLoadPackage {
 
         // 2. 执行隐私权限欺骗
         hookPrivacy(lpparam);
+
+        // 3. 执行风险弹窗拦截 (本次新增融合)
+        hookRiskDialog(lpparam);
     }
 
     /**
@@ -40,18 +49,16 @@ public class UnicomHook implements IXposedHookLoadPackage {
         String SPLASH_ACTIVITY = "com.sinovatech.unicom.basic.ui.activity.WelcomeClient";
         String MAIN_ACTIVITY = "com.sinovatech.unicom.basic.ui.activity.MainActivity";
 
-        // 第一道防线：先试探这个类在当前版本存不存在
         Class<?> splashClass = XposedHelpers.findClassIfExists(SPLASH_ACTIVITY, lpparam.classLoader);
         if (splashClass == null) {
             XposedBridge.log(TAG + "当前为旧版联通，未找到新版开屏类，安全放行，不执行去广告。");
-            return; // 类都不存在，直接撤退，绝不恋战
+            return;
         }
 
         try {
             XposedHelpers.findAndHookMethod(splashClass, "onCreate", Bundle.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    // 第二道防线：把运行时逻辑包起来，防止旧版没有 MainActivity 导致崩溃
                     try {
                         Activity activity = (Activity) param.thisObject;
                         XposedBridge.log(TAG + "拦截到开屏页，正在跳转主界面...");
@@ -79,9 +86,6 @@ public class UnicomHook implements IXposedHookLoadPackage {
      */
     private void hookPrivacy(LoadPackageParam lpparam) {
         try {
-            // ==========================================
-            // 第一步：欺骗权限检查，永远返回“已授权”
-            // ==========================================
             XposedHelpers.findAndHookMethod(ContextWrapper.class, "checkSelfPermission", String.class, new XC_MethodReplacement() {
                 @Override
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
@@ -96,7 +100,6 @@ public class UnicomHook implements IXposedHookLoadPackage {
                             XposedBridge.log(TAG + "拦截到权限检查: " + permission + "，强行返回已授权！");
                             return PackageManager.PERMISSION_GRANTED;
                         }
-                        // 其他权限正常放行
                         return XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args);
                     } catch (Throwable t) {
                         XposedBridge.log(TAG + "权限欺骗回调内部异常，放行: " + t.getMessage());
@@ -105,28 +108,73 @@ public class UnicomHook implements IXposedHookLoadPackage {
                 }
             });
 
-            // ==========================================
-            // 第二步：伪造定位数据
-            // ==========================================
             XposedHelpers.findAndHookMethod(LocationManager.class, "getLastKnownLocation", String.class, new XC_MethodReplacement() {
                 @Override
                 protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
                     try {
                         XposedBridge.log(TAG + "拦截到获取定位，返回伪造坐标！");
                         Location mockLocation = new Location(LocationManager.GPS_PROVIDER);
-                        mockLocation.setLatitude(23.1291);  // 纬度
-                        mockLocation.setLongitude(113.2644); // 经度
+                        mockLocation.setLatitude(23.1291);  
+                        mockLocation.setLongitude(113.2644); 
                         mockLocation.setAccuracy(100f);
                         mockLocation.setTime(System.currentTimeMillis());
                         return mockLocation;
                     } catch (Throwable t) {
                         XposedBridge.log(TAG + "伪造定位失败，返回空: " + t.getMessage());
-                        return null; // 如果伪造代码出错，宁可返回空也不能让 App 崩溃
+                        return null; 
                     }
                 }
             });
         } catch (Throwable t) {
             XposedBridge.log(TAG + "隐私 Hook 绑定失败: " + t.getMessage());
         }
+    }
+
+    /**
+     * 风险警告弹窗拦截 (防 Root 检测警告)
+     */
+    private void hookRiskDialog(LoadPackageParam lpparam) {
+        try {
+            XposedHelpers.findAndHookMethod(Dialog.class, "show", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    final Dialog dialog = (Dialog) param.thisObject;
+                    Window window = dialog.getWindow();
+                    if (window == null) return;
+                    
+                    final View decorView = window.getDecorView();
+                    decorView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+                        @Override
+                        public void onGlobalLayout() {
+                            if (scanAndKillRiskDialog(decorView)) {
+                                XposedBridge.log(TAG + "抓获环境风险警告弹窗，已强行销毁！");
+                                dialog.dismiss();
+                                decorView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                            }
+                        }
+                    });
+                }
+            });
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "弹窗拦截 Hook 失败: " + t.getMessage());
+        }
+    }
+
+    /**
+     * 扫描视图树匹配敏感警告词条
+     */
+    private boolean scanAndKillRiskDialog(View view) {
+        if (view instanceof TextView) {
+            String text = ((TextView) view).getText().toString();
+            if (text.contains("current device environment") || text.contains("环境存在风险")) {
+                return true;
+            }
+        } else if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                if (scanAndKillRiskDialog(group.getChildAt(i))) return true;
+            }
+        }
+        return false;
     }
 }
