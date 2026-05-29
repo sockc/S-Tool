@@ -1,4 +1,4 @@
-package com.sockc.unicomhook;
+1package com.sockc.unicomhook;
 
 import android.app.Activity;
 import android.app.Dialog;
@@ -39,7 +39,7 @@ public class UnicomHook implements IXposedHookLoadPackage {
         hookPrivacy(lpparam);
 
         // 3. 执行风险弹窗拦截 (本次新增融合)
-        hookRiskDialog(lpparam);
+        //hookRiskDialog(lpparam);
     }
 
     /**
