@@ -1,4 +1,4 @@
-1package com.sockc.unicomhook;
+package com.sockc.unicomhook;
 
 import android.app.Activity;
 import android.app.Dialog;
