@@ -1,16 +1,14 @@
 package com.sockc.unicomhook;
 
 import android.app.Activity;
-import android.graphics.Rect;
-import android.os.Handler;
-import android.os.Looper;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
+import android.webkit.WebView;
 
+import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -25,313 +23,203 @@ public class XianyuHook implements IXposedHookLoadPackage {
     private static final String TAG = "Sockc_Xianyu: ";
     private static final String TARGET_PACKAGE = "com.taobao.idlefish";
     private static final String MAIN_ACTIVITY = "com.taobao.idlefish.maincontainer.activity.MainActivity";
+    private static final String INIT_ACTIVITY = "com.taobao.fleamarket.home.activity.InitActivity";
 
-    private static final Set<String> KEYWORDS = new HashSet<>(Arrays.asList(
-            "跳过", "关闭", "跳過", "略过", "skip", "close"
+    private static final Set<String> BLOCK_KEYS = new HashSet<>(Arrays.asList(
+            "splash", "startup", "launch", "advert", "advertise", "adservice",
+            "screenad", "openad", "startad", "preloadad", "jumpad",
+            "开屏", "广告", "启动图"
     ));
+
+    private static volatile WeakReference<Activity> sTopActivity = new WeakReference<>(null);
+    private static volatile long sStartupBegin = 0L;
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) return;
         if (!TARGET_PACKAGE.equals(lpparam.processName)) return;
 
-        XposedBridge.log(TAG + "V4 已注入主进程: " + lpparam.processName);
+        XposedBridge.log(TAG + "V5 已注入主进程: " + lpparam.processName);
 
-        XposedHelpers.findAndHookMethod(
-                Activity.class,
-                "onWindowFocusChanged",
-                boolean.class,
-                new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        Activity activity = (Activity) param.thisObject;
-                        boolean hasFocus = (boolean) param.args[0];
-                        String cls = activity.getClass().getName();
-
-                        if (!MAIN_ACTIVITY.equals(cls)) return;
-                        if (!hasFocus) return;
-
-                        XposedBridge.log(TAG + "命中 MainActivity 焦点，开始扫描");
-
-                        View root = activity.getWindow() == null ? null : activity.getWindow().getDecorView();
-                        if (root == null) return;
-
-                        startScan(activity, root);
-                    }
-                }
-        );
+        hookActivityLifecycle();
+        hookAndroidWebView();
+        hookUcWebViewIfExists(lpparam.classLoader);
+        hookAddView();
     }
 
-    private void startScan(final Activity activity, final View root) {
-        final Handler handler = new Handler(Looper.getMainLooper());
-
-        Runnable task = new Runnable() {
-            int count = 0;
-            boolean done = false;
-
+    private void hookActivityLifecycle() {
+        XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
             @Override
-            public void run() {
-                if (done) return;
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                Activity activity = (Activity) param.thisObject;
+                String cls = activity.getClass().getName();
 
-                try {
-                    if (activity.isFinishing()) return;
+                sTopActivity = new WeakReference<>(activity);
 
-                    count++;
-                    XposedBridge.log(TAG + "第 " + count + " 次扫描");
-
-                    // 先找“跳过/关闭”文字控件
-                    View textTarget = findKeywordView(root);
-                    if (textTarget != null) {
-                        XposedBridge.log(TAG + "找到文字候选: " + viewInfo(textTarget));
-                        if (clickView(textTarget)) {
-                            XposedBridge.log(TAG + "文字候选点击成功");
-                            done = true;
-                            return;
-                        }
-                    }
-
-                    // 再找右上角小 clickable View
-                    View topRight = findTopRightCandidate(root, root.getWidth(), root.getHeight(), activity);
-                    if (topRight != null) {
-                        XposedBridge.log(TAG + "找到右上角候选: " + viewInfo(topRight));
-                        if (clickView(topRight)) {
-                            XposedBridge.log(TAG + "右上角候选点击成功");
-                            done = true;
-                            return;
-                        }
-                    }
-
-                    // 只打印可疑控件，别整棵树刷爆
-                    dumpInterestingViews(root, 0, root.getWidth(), root.getHeight(), activity);
-
-                    if (count < 15) {
-                        handler.postDelayed(this, 200);
-                    } else {
-                        XposedBridge.log(TAG + "扫描结束，未命中候选控件");
-                    }
-                } catch (Throwable t) {
-                    XposedBridge.log(TAG + "扫描异常: " + t);
+                if (MAIN_ACTIVITY.equals(cls) || INIT_ACTIVITY.equals(cls)) {
+                    sStartupBegin = SystemClock.elapsedRealtime();
+                    XposedBridge.log(TAG + "进入启动窗口: " + cls);
                 }
             }
-        };
-
-        handler.postDelayed(task, 150);
+        });
     }
 
-    private boolean clickView(View view) {
+    private void hookAndroidWebView() {
+        XposedBridge.hookAllMethods(WebView.class, "loadUrl", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (param.args == null || param.args.length == 0) return;
+                Object arg0 = param.args[0];
+                if (!(arg0 instanceof String)) return;
+
+                String url = (String) arg0;
+                if (shouldBlockUrl(url)) {
+                    XposedBridge.log(TAG + "拦截 Android WebView URL: " + url);
+                    param.setResult(null);
+                }
+            }
+        });
+
+        XposedBridge.hookAllMethods(WebView.class, "loadDataWithBaseURL", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (param.args == null || param.args.length < 1) return;
+                Object baseUrl = param.args[0];
+                if (baseUrl instanceof String && shouldBlockUrl((String) baseUrl)) {
+                    XposedBridge.log(TAG + "拦截 Android WebView BaseURL: " + baseUrl);
+                    param.setResult(null);
+                }
+            }
+        });
+    }
+
+    private void hookUcWebViewIfExists(ClassLoader cl) {
         try {
-            if (view == null || !view.isShown()) return false;
+            Class<?> ucWebView = XposedHelpers.findClass("com.uc.webview.export.WebView", cl);
 
-            if (view.isClickable()) {
-                boolean ok = view.performClick();
-                XposedBridge.log(TAG + "performClick=" + ok);
-                if (ok) return true;
-            }
+            XposedBridge.hookAllMethods(ucWebView, "loadUrl", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (param.args == null || param.args.length == 0) return;
+                    Object arg0 = param.args[0];
+                    if (!(arg0 instanceof String)) return;
 
-            View parent = findClickableParent(view);
-            if (parent != null) {
-                boolean ok2 = parent.performClick();
-                XposedBridge.log(TAG + "parent.performClick=" + ok2);
-                if (ok2) return true;
+                    String url = (String) arg0;
+                    if (shouldBlockUrl(url)) {
+                        XposedBridge.log(TAG + "拦截 UC WebView URL: " + url);
+                        param.setResult(null);
+                    }
+                }
+            });
 
-                return dispatchCenterTap(parent);
-            }
-
-            return dispatchCenterTap(view);
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + "clickView 异常: " + t);
-            return false;
+            XposedBridge.log(TAG + "已挂上 UC WebView");
+        } catch (Throwable ignored) {
+            XposedBridge.log(TAG + "未发现 UC WebView，跳过");
         }
     }
 
-    private boolean dispatchCenterTap(View view) {
-        try {
-            Rect r = new Rect();
-            if (!view.getGlobalVisibleRect(r)) return false;
+    private void hookAddView() {
+        XposedBridge.hookAllMethods(ViewGroup.class, "addView", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                Activity top = sTopActivity.get();
+                if (top == null) return;
 
-            float x = r.centerX();
-            float y = r.centerY();
+                String actName = top.getClass().getName();
+                if (!MAIN_ACTIVITY.equals(actName) && !INIT_ACTIVITY.equals(actName)) return;
 
-            long downTime = android.os.SystemClock.uptimeMillis();
-            MotionEvent down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0);
-            MotionEvent up = MotionEvent.obtain(downTime, downTime + 80, MotionEvent.ACTION_UP, x, y, 0);
+                long delta = SystemClock.elapsedRealtime() - sStartupBegin;
+                if (delta < 0 || delta > 8000) return;
 
-            View root = view.getRootView();
-            boolean d1 = root.dispatchTouchEvent(down);
-            boolean d2 = root.dispatchTouchEvent(up);
+                if (param.args == null || param.args.length == 0) return;
+                Object first = param.args[0];
+                if (!(first instanceof View)) return;
 
-            down.recycle();
-            up.recycle();
+                View child = (View) first;
 
-            XposedBridge.log(TAG + "dispatchTap result=" + d1 + "/" + d2 + " @(" + x + "," + y + ")");
-            return d1 || d2;
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + "dispatchCenterTap 异常: " + t);
-            return false;
-        }
-    }
-
-    private View findKeywordView(View view) {
-        if (view == null || !view.isShown()) return null;
-
-        CharSequence text = null;
-        CharSequence desc = view.getContentDescription();
-
-        if (view instanceof TextView) {
-            text = ((TextView) view).getText();
-        }
-
-        if (!TextUtils.isEmpty(text) && containsKeyword(text.toString())) {
-            return view;
-        }
-
-        if (!TextUtils.isEmpty(desc) && containsKeyword(desc.toString())) {
-            return view;
-        }
-
-        if (view instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) view;
-            for (int i = 0; i < vg.getChildCount(); i++) {
-                View found = findKeywordView(vg.getChildAt(i));
-                if (found != null) return found;
+                if (shouldBlockStartupView(top, child)) {
+                    XposedBridge.log(TAG + "拦截启动广告 View: " + viewInfo(child));
+                    param.setResult(null);
+                }
             }
-        }
-
-        return null;
+        });
     }
 
-    private View findTopRightCandidate(View view, int screenW, int screenH, Activity activity) {
-        if (view == null || !view.isShown()) return null;
+    private boolean shouldBlockUrl(String url) {
+        if (TextUtils.isEmpty(url)) return false;
 
-        Rect r = new Rect();
-        view.getGlobalVisibleRect(r);
+        String lower = url.toLowerCase();
 
-        int w = r.width();
-        int h = r.height();
-
-        int maxW = dp(activity, 140);
-        int maxH = dp(activity, 90);
-        int topLimit = dp(activity, 260);
-        int rightLimit = dp(activity, 260);
-
-        boolean positionOk = r.top >= 0
-                && r.top <= topLimit
-                && r.right >= (screenW - rightLimit);
-
-        boolean sizeOk = w > 0 && h > 0 && w <= maxW && h <= maxH;
-
-        boolean candidate = view.isClickable() && positionOk && sizeOk;
-
-        if (candidate) return view;
-
-        if (view instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) view;
-            for (int i = 0; i < vg.getChildCount(); i++) {
-                View found = findTopRightCandidate(vg.getChildAt(i), screenW, screenH, activity);
-                if (found != null) return found;
+        // 只拦看起来像广告/开屏的 URL，避免误伤正常页面
+        for (String k : BLOCK_KEYS) {
+            if (lower.contains(k.toLowerCase())) {
+                return true;
             }
-        }
-
-        return null;
-    }
-
-    private void dumpInterestingViews(View view, int depth, int screenW, int screenH, Activity activity) {
-        if (view == null || !view.isShown()) return;
-
-        Rect r = new Rect();
-        view.getGlobalVisibleRect(r);
-
-        boolean hasText = false;
-        boolean hasDesc = !TextUtils.isEmpty(view.getContentDescription());
-        boolean clickable = view.isClickable();
-
-        if (view instanceof TextView) {
-            CharSequence t = ((TextView) view).getText();
-            hasText = !TextUtils.isEmpty(t);
-        }
-
-        int maxW = dp(activity, 160);
-        int maxH = dp(activity, 100);
-        boolean topRightSmall = clickable
-                && r.top >= 0
-                && r.top <= dp(activity, 280)
-                && r.right >= (screenW - dp(activity, 280))
-                && r.width() <= maxW
-                && r.height() <= maxH;
-
-        if (hasText || hasDesc || topRightSmall) {
-            XposedBridge.log(TAG + viewInfo(view));
-        }
-
-        if (view instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) view;
-            for (int i = 0; i < vg.getChildCount(); i++) {
-                dumpInterestingViews(vg.getChildAt(i), depth + 1, screenW, screenH, activity);
-            }
-        }
-    }
-
-    private String viewInfo(View view) {
-        Rect rect = new Rect();
-        view.getGlobalVisibleRect(rect);
-
-        String text = "";
-        String desc = "";
-        String idName = "";
-
-        if (view instanceof TextView) {
-            CharSequence t = ((TextView) view).getText();
-            if (!TextUtils.isEmpty(t)) {
-                text = " text=\"" + safe(t.toString()) + "\"";
-            }
-        }
-
-        CharSequence d = view.getContentDescription();
-        if (!TextUtils.isEmpty(d)) {
-            desc = " desc=\"" + safe(d.toString()) + "\"";
-        }
-
-        int id = view.getId();
-        if (id != View.NO_ID) {
-            try {
-                idName = " id=" + view.getResources().getResourceEntryName(id);
-            } catch (Throwable ignored) {
-                idName = " id=" + id;
-            }
-        }
-
-        return view.getClass().getName()
-                + " clickable=" + view.isClickable()
-                + " rect=[" + rect.left + "," + rect.top + "," + rect.right + "," + rect.bottom + "]"
-                + idName + text + desc;
-    }
-
-    private String safe(String s) {
-        s = s.replace("\n", "\\n").replace("\r", "");
-        return s.length() > 60 ? s.substring(0, 60) + "..." : s;
-    }
-
-    private boolean containsKeyword(String s) {
-        if (s == null) return false;
-        String lower = s.trim().toLowerCase();
-        for (String k : KEYWORDS) {
-            if (lower.contains(k.toLowerCase())) return true;
         }
         return false;
     }
 
-    private View findClickableParent(View view) {
-        android.view.ViewParent p = view.getParent();
-        while (p instanceof View) {
-            View pv = (View) p;
-            if (pv.isClickable() && pv.isShown()) return pv;
-            p = pv.getParent();
+    private boolean shouldBlockStartupView(Activity activity, View view) {
+        if (view == null) return false;
+
+        String cls = view.getClass().getName().toLowerCase();
+        String desc = view.getContentDescription() == null ? "" : view.getContentDescription().toString().toLowerCase();
+        String idName = getIdName(view).toLowerCase();
+
+        boolean keywordHit = containsBlockKey(cls) || containsBlockKey(desc) || containsBlockKey(idName);
+        boolean webLike = cls.contains("webview") || cls.contains("windvane") || cls.contains("h5");
+
+        ViewGroup.LayoutParams lp = view.getLayoutParams();
+        int width = 0;
+        int height = 0;
+        if (lp != null) {
+            width = lp.width;
+            height = lp.height;
         }
-        return null;
+
+        DisplayMetrics dm = activity.getResources().getDisplayMetrics();
+        int sw = dm.widthPixels;
+        int sh = dm.heightPixels;
+
+        boolean fullScreenLike =
+                (width == ViewGroup.LayoutParams.MATCH_PARENT || width >= sw * 0.8f) &&
+                (height == ViewGroup.LayoutParams.MATCH_PARENT || height >= sh * 0.5f);
+
+        return keywordHit || (webLike && fullScreenLike);
     }
 
-    private int dp(Activity activity, int value) {
-        DisplayMetrics dm = activity.getResources().getDisplayMetrics();
-        return Math.round(value * dm.density);
+    private boolean containsBlockKey(String s) {
+        if (TextUtils.isEmpty(s)) return false;
+        String lower = s.toLowerCase();
+        for (String k : BLOCK_KEYS) {
+            if (lower.contains(k.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String getIdName(View view) {
+        int id = view.getId();
+        if (id == View.NO_ID) return "";
+        try {
+            return view.getResources().getResourceEntryName(id);
+        } catch (Throwable ignored) {
+            return String.valueOf(id);
+        }
+    }
+
+    private String viewInfo(View view) {
+        String idName = getIdName(view);
+        String desc = view.getContentDescription() == null ? "" : view.getContentDescription().toString();
+        ViewGroup.LayoutParams lp = view.getLayoutParams();
+
+        int w = lp == null ? 0 : lp.width;
+        int h = lp == null ? 0 : lp.height;
+
+        return view.getClass().getName()
+                + " id=" + idName
+                + " desc=" + desc
+                + " lp=[" + w + "," + h + "]";
     }
 }
