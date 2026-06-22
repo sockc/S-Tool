@@ -13,3 +13,4 @@ com.sockc.unicomhook.PinduoduoHook
 com.sockc.unicomhook.ClipboardHook
 com.sockc.unicomhook.ZhihuijiaHook
 com.sockc.unicomhook.XianyuHook
+com.sockc.unicomhook.SmsCodeHook
