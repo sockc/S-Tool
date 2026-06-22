@@ -3,6 +3,7 @@ package com.sockc.unicomhook;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -58,7 +59,7 @@ public class SmsCodeAutoCopy {
         sStarted = true;
         XposedBridge.log(TAG + "短信自动复制已启动");
 
-        // 启动后短轮询几次，解决“短信已收到但只有点已读才触发”的问题
+        // 启动后短轮询几次，只扫最近未读短信
         scheduleStartupScan();
     }
 
@@ -97,7 +98,8 @@ public class SmsCodeAutoCopy {
                             }
                         }
 
-                        handleSmsBody("broadcast", address, bodyBuilder.toString());
+                        // 广播阶段先尝试复制；这里没有数据库 _id，所以先传 -1
+                        handleSmsBody(-1L, "broadcast", address, bodyBuilder.toString());
                     } catch (Throwable t) {
                         XposedBridge.log(TAG + "处理短信广播失败: " + t);
                     }
@@ -124,7 +126,6 @@ public class SmsCodeAutoCopy {
                     super.onChange(selfChange);
                     XposedBridge.log(TAG + "ContentObserver onChange(boolean)");
                     handleRecentUnreadSms("observer");
-                    handleLatestSms("observer_fallback");
                 }
 
                 @Override
@@ -132,7 +133,6 @@ public class SmsCodeAutoCopy {
                     super.onChange(selfChange, uri);
                     XposedBridge.log(TAG + "ContentObserver onChange(uri) -> " + uri);
                     handleRecentUnreadSms("observer_uri");
-                    handleLatestSms("observer_uri_fallback");
                 }
             };
 
@@ -158,7 +158,6 @@ public class SmsCodeAutoCopy {
                     try {
                         XposedBridge.log(TAG + "启动轮询扫描第 " + index + " 次");
                         handleRecentUnreadSms("startup_poll");
-                        handleLatestSms("startup_poll_fallback");
                     } catch (Throwable t) {
                         XposedBridge.log(TAG + "启动轮询失败: " + t);
                     }
@@ -170,9 +169,15 @@ public class SmsCodeAutoCopy {
     private static void handleRecentUnreadSms(String source) {
         if (sAppContext == null) return;
 
+        long now = System.currentTimeMillis();
+        if (now - sLastHandleTime < 800) {
+            XposedBridge.log(TAG + "触发过快，跳过一次 source=" + source);
+            return;
+        }
+        sLastHandleTime = now;
+
         Cursor cursor = null;
         try {
-            long now = System.currentTimeMillis();
             long minTime = now - 5 * 60 * 1000L; // 只看近5分钟未读短信
 
             cursor = sAppContext.getContentResolver().query(
@@ -200,7 +205,7 @@ public class SmsCodeAutoCopy {
 
                 trimHandledIdSet(smsId);
 
-                handleSmsBody(source, address, body);
+                handleSmsBody(smsId, source, address, body);
                 return;
             } while (cursor.moveToNext());
 
@@ -217,57 +222,7 @@ public class SmsCodeAutoCopy {
         }
     }
 
-    private static void handleLatestSms(String source) {
-        if (sAppContext == null) return;
-
-        long now = System.currentTimeMillis();
-        if (now - sLastHandleTime < 800) {
-            XposedBridge.log(TAG + "触发过快，跳过一次 source=" + source);
-            return;
-        }
-        sLastHandleTime = now;
-
-        Cursor cursor = null;
-        try {
-            cursor = sAppContext.getContentResolver().query(
-                    SMS_INBOX_URI,
-                    new String[]{"_id", "address", "body", "date"},
-                    null,
-                    null,
-                    "date DESC"
-            );
-
-            if (cursor == null || !cursor.moveToFirst()) {
-                XposedBridge.log(TAG + "短信查询为空 source=" + source);
-                return;
-            }
-
-            long smsId = cursor.getLong(cursor.getColumnIndexOrThrow("_id"));
-            String address = cursor.getString(cursor.getColumnIndexOrThrow("address"));
-            String body = cursor.getString(cursor.getColumnIndexOrThrow("body"));
-
-            if (sHandledSmsIds.contains(smsId)) {
-                XposedBridge.log(TAG + "短信已处理过, id=" + smsId + ", source=" + source);
-                return;
-            }
-            sHandledSmsIds.add(smsId);
-
-            trimHandledIdSet(smsId);
-
-            handleSmsBody(source, address, body);
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + "处理短信失败 source=" + source + ": " + t);
-        } finally {
-            if (cursor != null) {
-                try {
-                    cursor.close();
-                } catch (Throwable ignored) {
-                }
-            }
-        }
-    }
-
-    private static void handleSmsBody(String source, String address, String body) {
+    private static void handleSmsBody(long smsId, String source, String address, String body) {
         if (TextUtils.isEmpty(body)) {
             XposedBridge.log(TAG + "短信正文为空 source=" + source);
             return;
@@ -292,6 +247,31 @@ public class SmsCodeAutoCopy {
 
         XposedBridge.log(TAG + "已复制验证码: " + code + ", source=" + source + ", from=" + address);
         Toast.makeText(sAppContext, "验证码已复制: " + code, Toast.LENGTH_SHORT).show();
+
+        // 只有拿到真实短信ID时才标记已读
+        if (smsId > 0) {
+            markSmsAsRead(smsId);
+        }
+    }
+
+    private static void markSmsAsRead(long smsId) {
+        if (sAppContext == null || smsId <= 0) return;
+
+        try {
+            ContentValues values = new ContentValues();
+            values.put("read", 1);
+
+            int rows = sAppContext.getContentResolver().update(
+                    SMS_INBOX_URI,
+                    values,
+                    "_id=?",
+                    new String[]{String.valueOf(smsId)}
+            );
+
+            XposedBridge.log(TAG + "已将短信标记为已读, id=" + smsId + ", rows=" + rows);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "标记短信已读失败, id=" + smsId + ": " + t);
+        }
     }
 
     private static String extractCode(String body) {
@@ -344,4 +324,4 @@ public class SmsCodeAutoCopy {
         }
         return s;
     }
-}
+    }
