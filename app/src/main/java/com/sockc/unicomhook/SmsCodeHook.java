@@ -19,7 +19,8 @@ public class SmsCodeHook implements IXposedHookLoadPackage {
                 + lpparam.packageName + " / " + lpparam.processName);
 
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) return;
-
+        if (!TARGET_PACKAGE.equals(lpparam.processName)) return;
+        
         XposedBridge.log(TAG + "命中谷歌信息");
 
         XposedHelpers.findAndHookMethod(
