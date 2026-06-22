@@ -36,12 +36,13 @@ public class SmsCodeAutoCopy {
     // 已处理短信ID，防重复
     private static final Set<Long> sHandledSmsIds = new HashSet<>();
 
-    // 防止短时间内重复触发
-    private static long sLastHandleTime = 0L;
-
-    // 防止同一个验证码反复复制
+    // 防止同一个验证码短时间反复复制
     private static String sLastCopiedCode = null;
     private static long sLastCopyTime = 0L;
+
+    // 用“延迟合并扫描”替代“触发过快直接跳过”
+    private static final Handler sMainHandler = new Handler(Looper.getMainLooper());
+    private static Runnable sPendingSmsScan;
 
     public static synchronized void start(Context context) {
         if (context == null) return;
@@ -59,7 +60,6 @@ public class SmsCodeAutoCopy {
         sStarted = true;
         XposedBridge.log(TAG + "短信自动复制已启动");
 
-        // 启动后短轮询几次，只扫最近未读短信
         scheduleStartupScan();
     }
 
@@ -98,8 +98,11 @@ public class SmsCodeAutoCopy {
                             }
                         }
 
-                        // 广播阶段先尝试复制；这里没有数据库 _id，所以先传 -1
-                        handleSmsBody(-1L, "broadcast", address, bodyBuilder.toString());
+                        XposedBridge.log(TAG + "广播收到短信，等待入库后扫描未读, from=" + address
+                                + ", body=" + safe(bodyBuilder.toString()));
+
+                        // 不在广播阶段直接复制，统一等短信入库后扫描未读
+                        scheduleUnreadScan("broadcast", 600);
                     } catch (Throwable t) {
                         XposedBridge.log(TAG + "处理短信广播失败: " + t);
                     }
@@ -125,14 +128,21 @@ public class SmsCodeAutoCopy {
                 public void onChange(boolean selfChange) {
                     super.onChange(selfChange);
                     XposedBridge.log(TAG + "ContentObserver onChange(boolean)");
-                    handleRecentUnreadSms("observer");
+                    scheduleUnreadScan("observer", 500);
                 }
 
                 @Override
                 public void onChange(boolean selfChange, Uri uri) {
                     super.onChange(selfChange, uri);
-                    XposedBridge.log(TAG + "ContentObserver onChange(uri) -> " + uri);
-                    handleRecentUnreadSms("observer_uri");
+                    String u = uri == null ? "" : uri.toString();
+                    XposedBridge.log(TAG + "ContentObserver onChange(uri) -> " + u);
+
+                    // raw 阶段一般还没稳定，晚一点查
+                    if (u.startsWith("content://sms/raw")) {
+                        scheduleUnreadScan("observer_raw", 800);
+                    } else {
+                        scheduleUnreadScan("observer_uri", 400);
+                    }
                 }
             };
 
@@ -146,18 +156,16 @@ public class SmsCodeAutoCopy {
     }
 
     private static void scheduleStartupScan() {
-        Handler handler = new Handler(Looper.getMainLooper());
-
         for (int i = 0; i < 6; i++) {
             final int index = i + 1;
             int delay = 500 + i * 1000;
 
-            handler.postDelayed(new Runnable() {
+            sMainHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     try {
                         XposedBridge.log(TAG + "启动轮询扫描第 " + index + " 次");
-                        handleRecentUnreadSms("startup_poll");
+                        scheduleUnreadScan("startup_poll", 300);
                     } catch (Throwable t) {
                         XposedBridge.log(TAG + "启动轮询失败: " + t);
                     }
@@ -166,18 +174,36 @@ public class SmsCodeAutoCopy {
         }
     }
 
-    private static void handleRecentUnreadSms(String source) {
-        if (sAppContext == null) return;
+    private static void scheduleUnreadScan(final String source, long delayMs) {
+        try {
+            if (sPendingSmsScan != null) {
+                sMainHandler.removeCallbacks(sPendingSmsScan);
+            }
 
-        long now = System.currentTimeMillis();
-        if (now - sLastHandleTime < 800) {
-            XposedBridge.log(TAG + "触发过快，跳过一次 source=" + source);
-            return;
+            sPendingSmsScan = new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        XposedBridge.log(TAG + "延迟执行未读短信扫描 source=" + source);
+                        handleRecentUnreadSmsNow(source);
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + "延迟扫描失败 source=" + source + ": " + t);
+                    }
+                }
+            };
+
+            sMainHandler.postDelayed(sPendingSmsScan, delayMs);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "scheduleUnreadScan 失败: " + t);
         }
-        sLastHandleTime = now;
+    }
+
+    private static void handleRecentUnreadSmsNow(String source) {
+        if (sAppContext == null) return;
 
         Cursor cursor = null;
         try {
+            long now = System.currentTimeMillis();
             long minTime = now - 5 * 60 * 1000L; // 只看近5分钟未读短信
 
             cursor = sAppContext.getContentResolver().query(
@@ -248,7 +274,6 @@ public class SmsCodeAutoCopy {
         XposedBridge.log(TAG + "已复制验证码: " + code + ", source=" + source + ", from=" + address);
         Toast.makeText(sAppContext, "验证码已复制: " + code, Toast.LENGTH_SHORT).show();
 
-        // 只有拿到真实短信ID时才标记已读
         if (smsId > 0) {
             markSmsAsRead(smsId);
         }
@@ -324,4 +349,4 @@ public class SmsCodeAutoCopy {
         }
         return s;
     }
-    }
+}
