@@ -63,40 +63,36 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
                 try {
-                    View host = (View) param.thisObject;
+                    final View host = (View) param.thisObject;
                     attachLayoutListenerIfNeeded(host);
+
+                    host.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                installOrUpdate(host);
+                            } catch (Throwable t) {
+                                XposedBridge.log(TAG + "构造后 post installOrUpdate 失败: " + t);
+                            }
+                        }
+                    });
+
+                    host.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                installOrUpdate(host);
+                            } catch (Throwable t) {
+                                XposedBridge.log(TAG + "构造后延迟 installOrUpdate 失败: " + t);
+                            }
+                        }
+                    }, 1000);
+
                 } catch (Throwable t) {
                     XposedBridge.log(TAG + "构造后附加监听失败: " + t);
                 }
             }
         });
-
-        try {
-            XposedHelpers.findAndHookMethod(
-                    batteryCls,
-                    "onAttachedToWindow",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            try {
-                                View host = (View) param.thisObject;
-                                attachLayoutListenerIfNeeded(host);
-                                host.post(() -> {
-                                    try {
-                                        installOrUpdate(host);
-                                    } catch (Throwable t) {
-                                        XposedBridge.log(TAG + "attached installOrUpdate 失败: " + t);
-                                    }
-                                });
-                            } catch (Throwable t) {
-                                XposedBridge.log(TAG + "onAttachedToWindow Hook 失败: " + t);
-                            }
-                        }
-                    }
-            );
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + "Hook onAttachedToWindow 失败: " + t);
-        }
     }
 
     private boolean isSystemUiProcess(String pkg, String proc) {
@@ -129,6 +125,7 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
                 public void onLayoutChange(View v, int left, int top, int right, int bottom,
                                            int oldLeft, int oldTop, int oldRight, int oldBottom) {
                     try {
+                        XposedBridge.log(TAG + "onLayoutChange 触发: " + v.getWidth() + "x" + v.getHeight());
                         installOrUpdate(v);
                     } catch (Throwable t) {
                         XposedBridge.log(TAG + "布局监听 installOrUpdate 失败: " + t);
@@ -174,7 +171,8 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
         tv.setSingleLine(true);
         tv.setClickable(false);
         tv.setFocusable(false);
-        tv.setAlpha(0.95f);
+        tv.setAlpha(0.96f);
+        tv.setShadowLayer(1.2f, 0f, 0f, Color.BLACK);
         return tv;
     }
 
@@ -234,9 +232,9 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
         int iconW = Math.max(iconView.getWidth(), 1);
         int iconH = Math.max(iconView.getHeight(), 1);
 
-        float textPx = Math.max(10f, iconH * 0.50f);
+        float textPx = Math.max(9f, iconH * 0.50f);
         if (level >= 100) {
-            textPx = Math.max(9f, iconH * 0.42f);
+            textPx = Math.max(8f, iconH * 0.42f);
         }
         tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx);
 
