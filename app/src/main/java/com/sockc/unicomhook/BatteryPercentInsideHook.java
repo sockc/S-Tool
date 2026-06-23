@@ -51,7 +51,7 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
 
         XposedBridge.log(TAG + "注入到 SystemUI: " + lpparam.packageName);
 
-        Class<?> batteryCls = findFirstExistingClass(lpparam.classLoader, BATTERY_VIEW_CLASSES);
+        final Class<?> batteryCls = findFirstExistingClass(lpparam.classLoader, BATTERY_VIEW_CLASSES);
         if (batteryCls == null) {
             XposedBridge.log(TAG + "没找到 BatteryMeterView 候选类");
             return;
@@ -59,11 +59,13 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
 
         XposedBridge.log(TAG + "命中电池类: " + batteryCls.getName());
 
+        // 备份：构造时也尝试一次
         XposedBridge.hookAllConstructors(batteryCls, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
                 try {
                     final View host = (View) param.thisObject;
+                    XposedBridge.log(TAG + "构造触发 BatteryMeterView");
                     attachLayoutListenerIfNeeded(host);
 
                     host.post(new Runnable() {
@@ -86,10 +88,56 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
                                 XposedBridge.log(TAG + "构造后延迟 installOrUpdate 失败: " + t);
                             }
                         }
-                    }, 1000);
+                    }, 1200);
+                } catch (Throwable t) {
+                    XposedBridge.log(TAG + "构造后处理失败: " + t);
+                }
+            }
+        });
+
+        // 主力：谁把 BatteryMeterView 加进状态栏，就在那里拦
+        XposedBridge.hookAllMethods(ViewGroup.class, "addView", new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                try {
+                    if (param.args == null || param.args.length == 0) return;
+                    Object arg0 = param.args[0];
+                    if (!(arg0 instanceof View)) return;
+
+                    final View child = (View) arg0;
+                    if (!batteryCls.isInstance(child)
+                            && !child.getClass().getName().equals(batteryCls.getName())) {
+                        return;
+                    }
+
+                    XposedBridge.log(TAG + "addView 命中 BatteryMeterView: " + child.getClass().getName());
+
+                    attachLayoutListenerIfNeeded(child);
+
+                    child.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                installOrUpdate(child);
+                            } catch (Throwable t) {
+                                XposedBridge.log(TAG + "addView post installOrUpdate 失败: " + t);
+                            }
+                        }
+                    });
+
+                    child.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                installOrUpdate(child);
+                            } catch (Throwable t) {
+                                XposedBridge.log(TAG + "addView 延迟 installOrUpdate 失败: " + t);
+                            }
+                        }
+                    }, 800);
 
                 } catch (Throwable t) {
-                    XposedBridge.log(TAG + "构造后附加监听失败: " + t);
+                    XposedBridge.log(TAG + "addView Hook 失败: " + t);
                 }
             }
         });
@@ -145,11 +193,21 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
         if (!(host instanceof ViewGroup)) return;
 
         ViewGroup batteryHost = (ViewGroup) host;
-        View iconView = findBatteryIconView(batteryHost);
 
+        if (batteryHost.getWidth() <= 0 || batteryHost.getHeight() <= 0) {
+            XposedBridge.log(TAG + "宿主尺寸未就绪: " + batteryHost.getWidth() + "x" + batteryHost.getHeight());
+            return;
+        }
+
+        View iconView = findBatteryIconView(batteryHost);
         if (iconView == null) {
             XposedBridge.log(TAG + "没找到内部电池图标 View，退回用宿主本身");
             iconView = batteryHost;
+        }
+
+        if (iconView.getWidth() <= 0 || iconView.getHeight() <= 0) {
+            XposedBridge.log(TAG + "图标尺寸未就绪: " + iconView.getWidth() + "x" + iconView.getHeight());
+            return;
         }
 
         TextView tv = getInsideText(batteryHost);
@@ -232,9 +290,9 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
         int iconW = Math.max(iconView.getWidth(), 1);
         int iconH = Math.max(iconView.getHeight(), 1);
 
-        float textPx = Math.max(9f, iconH * 0.50f);
+        float textPx = Math.max(8f, iconH * 0.48f);
         if (level >= 100) {
-            textPx = Math.max(8f, iconH * 0.42f);
+            textPx = Math.max(7f, iconH * 0.40f);
         }
         tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx);
 
