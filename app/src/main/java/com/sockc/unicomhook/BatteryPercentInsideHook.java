@@ -6,10 +6,10 @@ import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.BatteryManager;
-import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.View.OnLayoutChangeListener;
 import android.widget.TextView;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -43,6 +43,7 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
     };
 
     private static final String FIELD_INSIDE_TEXT = "sockc_inside_battery_text";
+    private static final String FIELD_LAYOUT_LISTENER = "sockc_battery_layout_listener";
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
@@ -58,31 +59,18 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
 
         XposedBridge.log(TAG + "命中电池类: " + batteryCls.getName());
 
-        // 关键：直接钩布局完成时机，基本一定会走
-        XposedHelpers.findAndHookMethod(
-                batteryCls,
-                "onLayout",
-                boolean.class, int.class, int.class, int.class, int.class,
-                new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        try {
-                            View host = (View) param.thisObject;
-                            host.post(() -> {
-                                try {
-                                    installOrUpdate(host);
-                                } catch (Throwable t) {
-                                    XposedBridge.log(TAG + "installOrUpdate 失败: " + t);
-                                }
-                            });
-                        } catch (Throwable t) {
-                            XposedBridge.log(TAG + "onLayout Hook 失败: " + t);
-                        }
-                    }
+        XposedBridge.hookAllConstructors(batteryCls, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                try {
+                    View host = (View) param.thisObject;
+                    attachLayoutListenerIfNeeded(host);
+                } catch (Throwable t) {
+                    XposedBridge.log(TAG + "构造后附加监听失败: " + t);
                 }
-        );
+            }
+        });
 
-        // 再补一个 attached，防止某些场景 onLayout 不及时
         try {
             XposedHelpers.findAndHookMethod(
                     batteryCls,
@@ -92,11 +80,12 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
                         protected void afterHookedMethod(MethodHookParam param) {
                             try {
                                 View host = (View) param.thisObject;
+                                attachLayoutListenerIfNeeded(host);
                                 host.post(() -> {
                                     try {
                                         installOrUpdate(host);
                                     } catch (Throwable t) {
-                                        XposedBridge.log(TAG + "attached install 失败: " + t);
+                                        XposedBridge.log(TAG + "attached installOrUpdate 失败: " + t);
                                     }
                                 });
                             } catch (Throwable t) {
@@ -105,7 +94,8 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
                         }
                     }
             );
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "Hook onAttachedToWindow 失败: " + t);
         }
     }
 
@@ -127,6 +117,31 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
             }
         }
         return null;
+    }
+
+    private void attachLayoutListenerIfNeeded(View host) {
+        try {
+            Object old = XposedHelpers.getAdditionalInstanceField(host, FIELD_LAYOUT_LISTENER);
+            if (old != null) return;
+
+            OnLayoutChangeListener listener = new OnLayoutChangeListener() {
+                @Override
+                public void onLayoutChange(View v, int left, int top, int right, int bottom,
+                                           int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                    try {
+                        installOrUpdate(v);
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + "布局监听 installOrUpdate 失败: " + t);
+                    }
+                }
+            };
+
+            host.addOnLayoutChangeListener(listener);
+            XposedHelpers.setAdditionalInstanceField(host, FIELD_LAYOUT_LISTENER, listener);
+            XposedBridge.log(TAG + "已附加 OnLayoutChangeListener");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "附加布局监听失败: " + t);
+        }
     }
 
     private void installOrUpdate(View host) {
@@ -159,7 +174,6 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
         tv.setSingleLine(true);
         tv.setClickable(false);
         tv.setFocusable(false);
-        tv.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         tv.setAlpha(0.95f);
         return tv;
     }
@@ -185,7 +199,6 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
             }
         }
 
-        // 兜底：从子 View 里找最像电池图标的那个
         if (host instanceof ViewGroup) {
             ViewGroup vg = (ViewGroup) host;
             for (int i = 0; i < vg.getChildCount(); i++) {
@@ -216,13 +229,15 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
         }
         if (level < 0) return;
 
-        String text = String.valueOf(level);
-        tv.setText(text);
+        tv.setText(String.valueOf(level));
 
         int iconW = Math.max(iconView.getWidth(), 1);
         int iconH = Math.max(iconView.getHeight(), 1);
 
         float textPx = Math.max(10f, iconH * 0.50f);
+        if (level >= 100) {
+            textPx = Math.max(9f, iconH * 0.42f);
+        }
         tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx);
 
         int spec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
@@ -232,24 +247,13 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
         tv.layout(0, 0, tw, th);
 
         float x = iconView.getLeft() + (iconW - tw) / 2f;
-        float y = iconView.getTop() + (iconH - th) / 2f - dp(host.getContext(), 0.5f);
-
-        // 100% 可能太挤，自动略缩一点
-        if (level >= 100) {
-            tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, Math.max(9f, iconH * 0.42f));
-            tv.measure(spec, spec);
-            tw = tv.getMeasuredWidth();
-            th = tv.getMeasuredHeight();
-            tv.layout(0, 0, tw, th);
-            x = iconView.getLeft() + (iconW - tw) / 2f;
-            y = iconView.getTop() + (iconH - th) / 2f - dp(host.getContext(), 0.5f);
-        }
+        float y = iconView.getTop() + (iconH - th) / 2f;
 
         tv.setX(x);
         tv.setY(y);
         tv.setVisibility(View.VISIBLE);
 
-        XposedBridge.log(TAG + "更新电量文字: " + text
+        XposedBridge.log(TAG + "更新电量文字: " + level
                 + " host=" + host.getWidth() + "x" + host.getHeight()
                 + " icon=" + iconW + "x" + iconH
                 + " pos=(" + x + "," + y + ")");
@@ -265,17 +269,17 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
 
         for (String name : fieldNames) {
             try {
+                int level = XposedHelpers.getIntField(obj, name);
+                if (level >= 0 && level <= 100) return level;
+            } catch (Throwable ignored) {
+            }
+
+            try {
                 Object value = XposedHelpers.getObjectField(obj, name);
                 if (value instanceof Integer) {
                     int level = (Integer) value;
                     if (level >= 0 && level <= 100) return level;
                 }
-            } catch (Throwable ignored) {
-            }
-
-            try {
-                int level = XposedHelpers.getIntField(obj, name);
-                if (level >= 0 && level <= 100) return level;
             } catch (Throwable ignored) {
             }
         }
@@ -300,9 +304,5 @@ public class BatteryPercentInsideHook implements IXposedHookLoadPackage {
         } catch (Throwable ignored) {
             return "";
         }
-    }
-
-    private float dp(Context context, float v) {
-        return v * context.getResources().getDisplayMetrics().density;
     }
 }
