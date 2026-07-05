@@ -1,13 +1,13 @@
-package com.sockc.oplusgamehook;
+package com.sockc.unicomhook;
 
 import android.app.Application;
 import android.content.Context;
 
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.Enumeration;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
-import dalvik.system.DexFile;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -15,118 +15,95 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public class OplusGameHook implements IXposedHookLoadPackage {
     private static final String TAG = "OplusGameHook";
-    private static final String CN = "com.tencent.tmgp.sgame";
-    private static final String GLOBAL = "com.levelinfinite.sgameGlobal";
+    private static final String TARGET = "com.oplus.games";
+
+    private static final String CN_GAME = "com.tencent.tmgp.sgame";
+    private static final String BLACK_KEY = "game_automation_black_list";
+
+    private static boolean hooked = false;
 
     @Override
-    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
-        if (!"com.oplus.games".equals(lpparam.packageName)) return;
+    public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) {
+        if (!TARGET.equals(lpparam.packageName)) return;
 
-        XposedBridge.log(TAG + ": loaded com.oplus.games");
+        XposedBridge.log(TAG + ": loaded " + lpparam.packageName);
 
-        XposedBridge.hookAllMethods(Application.class, "attach", new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) {
-                Context ctx = (Context) param.args[0];
-                scanAndHook(ctx, ctx.getClassLoader());
-            }
-        });
-    }
-
-    private static void scanAndHook(Context ctx, ClassLoader cl) {
         try {
-            String apk = ctx.getApplicationInfo().sourceDir;
-            XposedBridge.log(TAG + ": apk=" + apk);
+            XposedBridge.hookAllMethods(Application.class, "attach", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    Context ctx = (Context) param.args[0];
+                    ClassLoader cl = ctx.getClassLoader();
 
-            hookDex(apk, cl);
+                    XposedBridge.log(TAG + ": attach ok, package=" + ctx.getPackageName());
 
-            String[] splits = ctx.getApplicationInfo().splitSourceDirs;
-            if (splits != null) {
-                for (String s : splits) {
-                    hookDex(s, cl);
+                    hookMMKV(cl);
                 }
-            }
+            });
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": scan failed " + t);
+            XposedBridge.log(TAG + ": hook attach failed: " + t);
         }
     }
 
-    private static void hookDex(String apk, ClassLoader cl) {
-        try {
-            DexFile dex = new DexFile(apk);
-            Enumeration<String> entries = dex.entries();
+    private static void hookMMKV(ClassLoader cl) {
+        if (hooked) return;
 
-            while (entries.hasMoreElements()) {
-                String name = entries.nextElement();
-                String low = name.toLowerCase();
+        try {
+            final Class<?> mmkvClass = Class.forName("com.tencent.mmkv.MMKV", false, cl);
+
+            for (final Method method : mmkvClass.getDeclaredMethods()) {
+                String name = method.getName();
 
                 if (
-                        low.contains("gameautomation") ||
-                        low.contains("gamecombo") ||
-                        low.contains("combokey") ||
-                        low.contains("gameassistant") ||
-                        low.contains("trackservice") ||
-                        low.contains("nativeinterface") ||
-                        low.contains("toolpanel") ||
-                        low.contains("edg")
+                        "decodeString".equals(name) ||
+                        "getString".equals(name) ||
+                        "decodeStringSet".equals(name) ||
+                        "getStringSet".equals(name)
                 ) {
-                    hookClass(name, cl);
-                }
-            }
-        } catch (Throwable ignored) {}
-    }
-
-    private static void hookClass(String name, ClassLoader cl) {
-        try {
-            Class<?> c = Class.forName(name, false, cl);
-
-            for (Method m : c.getDeclaredMethods()) {
-                try {
-                    XposedBridge.hookMethod(m, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-                            boolean changed = false;
-
-                            for (int i = 0; i < param.args.length; i++) {
-                                if (CN.equals(param.args[i])) {
-                                    param.args[i] = GLOBAL;
-                                    changed = true;
-                                }
-                            }
-
-                            if (changed) {
-                                XposedBridge.log(TAG + ": arg CN->GLOBAL in " + name + "." + m.getName()
-                                        + " args=" + Arrays.toString(param.args));
-                            }
-                        }
-
+                    XposedBridge.hookMethod(method, new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
-                            Object r = param.getResult();
+                            try {
+                                if (param.args == null || param.args.length < 1) return;
+                                if (!(param.args[0] instanceof String)) return;
 
-                            if (CN.equals(r)) {
-                                param.setResult(GLOBAL);
-                                XposedBridge.log(TAG + ": result CN->GLOBAL in " + name + "." + m.getName());
-                            }
+                                String key = (String) param.args[0];
 
-                            String n = name.toLowerCase();
-                            String mn = m.getName().toLowerCase();
+                                if (!isAutomationBlackKey(key)) return;
 
-                            if (
-                                    r instanceof Boolean &&
-                                    Boolean.FALSE.equals(r) &&
-                                    (n.contains("gameassistant") || n.contains("gameautomation")) &&
-                                    (mn.contains("switch") || mn.contains("enable") || mn.contains("support"))
-                            ) {
-                                param.setResult(true);
-                                XposedBridge.log(TAG + ": force boolean true in " + name + "." + m.getName());
+                                Object result = param.getResult();
+
+                                if (result instanceof String || method.getReturnType() == String.class) {
+                                    param.setResult("[]");
+                                    XposedBridge.log(TAG + ": force " + key + " => [] by " + method.getName());
+                                    return;
+                                }
+
+                                if (result instanceof Set || Set.class.isAssignableFrom(method.getReturnType())) {
+                                    param.setResult(new HashSet<String>());
+                                    XposedBridge.log(TAG + ": force " + key + " => empty set by " + method.getName());
+                                }
+                            } catch (Throwable t) {
+                                XposedBridge.log(TAG + ": afterHook " + method.getName() + " failed: " + t);
                             }
                         }
                     });
-                } catch (Throwable ignored) {}
+
+                    XposedBridge.log(TAG + ": hooked MMKV." + name);
+                }
             }
 
-            XposedBridge.log(TAG + ": hooked " + name);
-        } catch (Throwable ignored) {}
+            hooked = true;
+            XposedBridge.log(TAG + ": MMKV hook installed");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": hook MMKV failed: " + t);
+        }
+    }
+
+    private static boolean isAutomationBlackKey(String key) {
+        if (key == null) return false;
+
+        return BLACK_KEY.equals(key)
+                || key.toLowerCase().contains("game_automation_black");
     }
 }
