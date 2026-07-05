@@ -14,5 +14,5 @@ com.sockc.unicomhook.ClipboardHook
 com.sockc.unicomhook.ZhihuijiaHook
 com.sockc.unicomhook.XianyuHook
 com.sockc.unicomhook.SmsCodeHook
-com.sockc.unicomhook.YingyongbaoHook.java
-com.sockc.unicomhook.OplusGameHook.java
+com.sockc.unicomhook.YingyongbaoHook
+com.sockc.unicomhook.OplusGameHook
