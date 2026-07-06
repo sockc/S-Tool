@@ -32,18 +32,21 @@ public class UnicomHook implements IXposedHookLoadPackage {
 
         XposedBridge.log(TAG + "已注入联通客户端，准备执行净化与欺骗...");
 
-        // 1. 执行去广告逻辑
+        // 1. 执行去广告逻辑 (冷启动)
         hookSplashAd(lpparam);
+
+        // 1.5 执行热启动去广告 (本次融合新增：对付后台切回前台的广告)
+        hookWarmSplash(lpparam);
 
         // 2. 执行隐私权限欺骗
         hookPrivacy(lpparam);
 
-        // 3. 执行风险弹窗拦截 (本次新增融合)
+        // 3. 执行风险弹窗拦截 (保持注释状态，防止 Native 级闪退)
         //hookRiskDialog(lpparam);
     }
 
     /**
-     * 去除开屏广告 (防闪退强化版)
+     * 去除开屏广告 (防闪退强化版 - 针对冷启动)
      */
     private void hookSplashAd(LoadPackageParam lpparam) {
         String SPLASH_ACTIVITY = "com.sinovatech.unicom.basic.ui.activity.WelcomeClient";
@@ -79,6 +82,56 @@ public class UnicomHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             XposedBridge.log(TAG + "去广告 Hook 失败: " + t.getMessage());
         }
+    }
+
+    /**
+     * 去除热启动广告 (新增逻辑：针对从桌面返回 App 时的广告)
+     */
+    private void hookWarmSplash(LoadPackageParam lpparam) {
+        try {
+            XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    Activity activity = (Activity) param.thisObject;
+                    Window window = activity.getWindow();
+                    if (window == null) return;
+
+                    final View decorView = window.getDecorView();
+
+                    decorView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+                        @Override
+                        public void onGlobalLayout() {
+                            if (scanAndClickSkip(decorView)) {
+                                XposedBridge.log(TAG + "抓获热启动广告【跳过】按钮，已底层光速点击！");
+                                decorView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                            }
+                        }
+                    });
+                }
+            });
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "热启动 Hook 失败: " + t.getMessage());
+        }
+    }
+
+    /**
+     * 配合热启动的视图扫描器
+     */
+    private boolean scanAndClickSkip(View view) {
+        if (view instanceof TextView) {
+            String text = ((TextView) view).getText().toString();
+            // 匹配各类常见的跳过文案
+            if (text.contains("跳过") || text.equals("关闭") || text.equals("点击跳过")) {
+                view.performClick(); 
+                return true;
+            }
+        } else if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                if (scanAndClickSkip(group.getChildAt(i))) return true;
+            }
+        }
+        return false;
     }
 
     /**
