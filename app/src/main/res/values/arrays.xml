@@ -2,31 +2,24 @@
 <resources>
     <string-array name="xposedscope">
         <item>com.autonavi.minimap</item>
-
         <item>com.ganji.android.haoche</item>
-
         <item>com.hikvision.hikconnect</item>
         <item>com.oplus.games</item>
         <item>com.android.systemui</item>
-
         <item>com.tencent.mobileqq</item>
         <item>com.taobao.idlefish</item>
         <item>com.tencent.android.qqdownloader</item>
-
-
         <item>com.taobao.taobao</item>
         <item>com.google.android.apps.messaging</item>
-
         <item>com.zhiliaoapp.musically</item>
         <item>com.ss.android.ugc.aweme</item>
         <item>com.sinovatech.unicom.ui</item>
-        
-
         <item>com.car300.activity</item>
         <item>com.che300.price</item>
         <item>com.sankuai.meituan</item>
         <item>com.xunmeng.pinduoduo</item>
         <item>com.changhong.ssc.cookbook</item>
+        <item>com.airvoy.airvoy</item>
 
 
     </string-array>
