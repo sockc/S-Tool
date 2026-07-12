@@ -16,3 +16,4 @@ com.sockc.unicomhook.XianyuHook
 com.sockc.unicomhook.SmsCodeHook
 com.sockc.unicomhook.YingyongbaoHook
 com.sockc.unicomhook.OplusGameHook
+com.sockc.unicomhook.AdMobBypassHook
