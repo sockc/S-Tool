@@ -17,15 +17,24 @@ import java.lang.ref.WeakReference;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
 
+import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
-public final class AirvoyHook {
+/**
+ * Airvoy 激励广告正常完成后自动关闭广告页面。
+ *
+ * 说明：
+ * 1. 不跳过倒计时；
+ * 2. 不伪造 RewardItem 或奖励回调；
+ * 3. 只在真实 onUserEarnedReward 回调出现后尝试关闭。
+ */
+public final class AirvoyHook implements IXposedHookLoadPackage {
 
     private static final String TARGET_PACKAGE = "com.airvoy.airvoy";
-    private static final String TAG = "Sockc AirvoyAutoClose: ";
+    private static final String TAG = "Sockc_Airvoy: ";
 
     private static final Handler MAIN_HANDLER =
             new Handler(Looper.getMainLooper());
@@ -38,17 +47,20 @@ public final class AirvoyHook {
 
     private static boolean lifecycleRegistered = false;
 
-    private AirvoyHook() {
-    }
-
-    public static void handleLoadPackage(
+    /**
+     * 必须是非 static 的 Xposed 入口方法。
+     * 类也必须实现 IXposedHookLoadPackage。
+     */
+    @Override
+    public void handleLoadPackage(
             XC_LoadPackage.LoadPackageParam lpparam
     ) {
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) {
             return;
         }
 
-        log("开始加载，process=" + lpparam.processName);
+        log("模块已加载，package=" + lpparam.packageName
+                + ", process=" + lpparam.processName);
 
         hookApplicationLifecycle();
         hookRewardCallbacks(lpparam.classLoader);
@@ -58,94 +70,99 @@ public final class AirvoyHook {
      * 保存当前前台 Activity。
      */
     private static void hookApplicationLifecycle() {
-        XposedHelpers.findAndHookMethod(
-                Application.class,
-                "attach",
-                Context.class,
-                new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        Application application =
-                                (Application) param.thisObject;
+        try {
+            XposedHelpers.findAndHookMethod(
+                    Application.class,
+                    "attach",
+                    Context.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(
+                                MethodHookParam param
+                        ) {
+                            Application application =
+                                    (Application) param.thisObject;
 
-                        synchronized (AirvoyHook.class) {
-                            if (lifecycleRegistered) {
-                                return;
+                            synchronized (AirvoyHook.class) {
+                                if (lifecycleRegistered) {
+                                    return;
+                                }
+                                lifecycleRegistered = true;
                             }
 
-                            lifecycleRegistered = true;
-                        }
+                            application.registerActivityLifecycleCallbacks(
+                                    new Application.ActivityLifecycleCallbacks() {
+                                        @Override
+                                        public void onActivityCreated(
+                                                Activity activity,
+                                                Bundle savedInstanceState
+                                        ) {
+                                            log("Activity created: "
+                                                    + activity.getClass().getName());
+                                        }
 
-                        application.registerActivityLifecycleCallbacks(
-                                new Application.ActivityLifecycleCallbacks() {
-                                    @Override
-                                    public void onActivityCreated(
-                                            Activity activity,
-                                            Bundle savedInstanceState
-                                    ) {
-                                        log("Activity created: "
-                                                + activity.getClass().getName());
-                                    }
+                                        @Override
+                                        public void onActivityStarted(
+                                                Activity activity
+                                        ) {
+                                        }
 
-                                    @Override
-                                    public void onActivityStarted(
-                                            Activity activity
-                                    ) {
-                                    }
-
-                                    @Override
-                                    public void onActivityResumed(
-                                            Activity activity
-                                    ) {
-                                        currentActivity =
-                                                new WeakReference<>(activity);
-
-                                        log("Activity resumed: "
-                                                + activity.getClass().getName());
-                                    }
-
-                                    @Override
-                                    public void onActivityPaused(
-                                            Activity activity
-                                    ) {
-                                    }
-
-                                    @Override
-                                    public void onActivityStopped(
-                                            Activity activity
-                                    ) {
-                                    }
-
-                                    @Override
-                                    public void onActivitySaveInstanceState(
-                                            Activity activity,
-                                            Bundle outState
-                                    ) {
-                                    }
-
-                                    @Override
-                                    public void onActivityDestroyed(
-                                            Activity activity
-                                    ) {
-                                        Activity current =
-                                                currentActivity.get();
-
-                                        if (current == activity) {
+                                        @Override
+                                        public void onActivityResumed(
+                                                Activity activity
+                                        ) {
                                             currentActivity =
-                                                    new WeakReference<>(null);
+                                                    new WeakReference<>(activity);
+
+                                            log("Activity resumed: "
+                                                    + activity.getClass().getName());
+                                        }
+
+                                        @Override
+                                        public void onActivityPaused(
+                                                Activity activity
+                                        ) {
+                                        }
+
+                                        @Override
+                                        public void onActivityStopped(
+                                                Activity activity
+                                        ) {
+                                        }
+
+                                        @Override
+                                        public void onActivitySaveInstanceState(
+                                                Activity activity,
+                                                Bundle outState
+                                        ) {
+                                        }
+
+                                        @Override
+                                        public void onActivityDestroyed(
+                                                Activity activity
+                                        ) {
+                                            Activity current =
+                                                    currentActivity.get();
+
+                                            if (current == activity) {
+                                                currentActivity =
+                                                        new WeakReference<>(null);
+                                            }
                                         }
                                     }
-                                }
-                        );
+                            );
 
-                        log("Activity 生命周期监听已注册");
+                            log("Activity 生命周期监听已注册");
+                        }
                     }
-                }
-        );
+            );
+        } catch (Throwable throwable) {
+            log("注册 Activity 生命周期监听失败: " + throwable);
+        }
     }
 
     /**
-     * Hook Flutter Google Mobile Ads 奖励回调。
+     * Hook Flutter Google Mobile Ads 的真实奖励回调。
      */
     private static void hookRewardCallbacks(ClassLoader classLoader) {
         hookRewardClass(
@@ -215,8 +232,7 @@ public final class AirvoyHook {
     }
 
     /**
-     * 一个广告可能连续触发 FlutterRewardedAd 和
-     * AdInstanceManager 两层回调，因此做防重复处理。
+     * 同一条广告可能在插件的不同层连续触发回调，因此做防重复。
      */
     private static void onRewardEarned(String source) {
         long now = System.currentTimeMillis();
@@ -233,28 +249,30 @@ public final class AirvoyHook {
         log("检测到真实奖励回调: " + source);
 
         if (activity == null) {
-            log("没有获取到当前 Activity");
+            log("未获取到当前 Activity");
             return;
         }
 
-        log("奖励时 Activity: "
+        log("奖励回调时 Activity: "
                 + activity.getClass().getName());
 
         scheduleCloseAttempts(activity);
     }
 
     /**
-     * 奖励回调出现时，关闭按钮可能刚刚生成。
-     * 分几个时间点重复检测。
+     * 部分广告在奖励回调后仍会停留数秒，分阶段尝试关闭。
      */
     private static void scheduleCloseAttempts(Activity activity) {
         long[] delays = {
-                200L,
-                700L,
-                1300L,
-                2200L,
-                3500L,
-                5000L
+                250L,
+                750L,
+                1500L,
+                2500L,
+                4000L,
+                6000L,
+                8500L,
+                12000L,
+                16000L
         };
 
         for (int i = 0; i < delays.length; i++) {
@@ -280,12 +298,11 @@ public final class AirvoyHook {
             }
 
             if (current != rewardedActivity) {
-                log("广告 Activity 已切换，停止点击");
+                log("Activity 已切换，停止本轮自动关闭");
                 return;
             }
 
-            if (current.isFinishing()
-                    || current.isDestroyed()) {
+            if (current.isFinishing() || current.isDestroyed()) {
                 return;
             }
 
@@ -296,10 +313,12 @@ public final class AirvoyHook {
                     findBestCornerCloseView(decorView);
 
             if (candidate != null) {
-                log("找到角落关闭控件: "
+                log("找到关闭候选控件: "
                         + candidate.getClass().getName()
                         + ", attempt="
-                        + attempt);
+                        + attempt
+                        + ", desc="
+                        + getViewDescription(candidate));
 
                 if (candidate.performClick()) {
                     log("performClick 成功");
@@ -307,6 +326,7 @@ public final class AirvoyHook {
                 }
 
                 tapViewCenter(decorView, candidate);
+                log("已点击候选控件中心");
                 return;
             }
 
@@ -318,6 +338,8 @@ public final class AirvoyHook {
             boolean adActivity =
                     activityName.contains("adactivity")
                             || activityName.contains("admob")
+                            || activityName.contains("unity")
+                            || activityName.contains("audience")
                             || containsWebView(decorView);
 
             if (!adActivity) {
@@ -327,16 +349,15 @@ public final class AirvoyHook {
             }
 
             /*
-             * 第一次只扫描，不盲点。
-             * 从第二次开始点右上角。
-             * 最后一次补点左上角，兼容少量左侧关闭按钮广告。
+             * 先仅扫描，稍后才执行角落点击。
+             * 这发生在真实奖励回调后，不会提前跳过广告。
              */
-            if (attempt >= 1 && attempt <= 4) {
+            if (attempt >= 1 && attempt <= 7) {
                 tapTopRight(decorView);
                 log("已尝试点击广告右上角，attempt=" + attempt);
-            } else if (attempt == 5) {
+            } else if (attempt == 8) {
                 tapTopLeft(decorView);
-                log("已尝试点击广告左上角");
+                log("已补充尝试点击广告左上角");
             }
 
         } catch (Throwable throwable) {
@@ -345,7 +366,7 @@ public final class AirvoyHook {
     }
 
     /**
-     * 查找位于屏幕左上角或右上角的小型可点击控件。
+     * 查找顶部左、右角的小型可点击控件。
      */
     private static View findBestCornerCloseView(View root) {
         if (root == null
@@ -456,13 +477,13 @@ public final class AirvoyHook {
         int right = left + width;
 
         boolean nearTop =
-                top < screenHeight * 0.27f;
+                top < screenHeight * 0.30f;
 
         boolean nearLeft =
-                left < screenWidth * 0.22f;
+                left < screenWidth * 0.24f;
 
         boolean nearRight =
-                right > screenWidth * 0.78f;
+                right > screenWidth * 0.76f;
 
         if (!nearTop || (!nearLeft && !nearRight)) {
             return false;
@@ -475,11 +496,7 @@ public final class AirvoyHook {
             return true;
         }
 
-        /*
-         * 有些广告关闭按钮完全没有文字和描述，
-         * 只要它足够小、可点击且位于顶部角落，也作为候选。
-         */
-        int geometricMax = dp(view, 80);
+        int geometricMax = dp(view, 84);
 
         return width <= geometricMax
                 && height <= geometricMax;
@@ -623,7 +640,8 @@ public final class AirvoyHook {
             float x,
             float y
     ) {
-        long time = android.os.SystemClock.uptimeMillis();
+        long time =
+                android.os.SystemClock.uptimeMillis();
 
         MotionEvent down = MotionEvent.obtain(
                 time,
