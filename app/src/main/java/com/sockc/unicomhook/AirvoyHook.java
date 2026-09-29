@@ -16,11 +16,9 @@ import java.lang.ref.WeakReference;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
 
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XposedBridge;
+import com.sockc.unicomhook.compat.XposedHelpers;
 
 /**
  * Airvoy 激励广告正常完成后自动关闭广告页面。
@@ -30,7 +28,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * 2. 不伪造 RewardItem 或奖励回调；
  * 3. 只在真实 onUserEarnedReward 回调出现后尝试关闭。
  */
-public final class AirvoyHook implements IXposedHookLoadPackage {
+public final class AirvoyHook implements HookModule {
 
     private static final String TARGET_PACKAGE = "com.airvoy.airvoy";
     private static final String TAG = "Sockc_Airvoy: ";
@@ -52,7 +50,7 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
      */
     @Override
     public void handleLoadPackage(
-            XC_LoadPackage.LoadPackageParam lpparam
+            LoadPackageParam lpparam
     ) {
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) {
             return;
