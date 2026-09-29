@@ -213,8 +213,10 @@ final class HookConfig {
             String capabilityId,
             String packageName
     ) {
-        if (!isEnabled(
-                FeatureRegistry.UNIVERSAL_PRIVACY,
+        if (!FeatureRegistry.isUniversalCapability(
+                capabilityId
+        )
+                || !isEnabled(
                 capabilityId
         )) {
             return false;
