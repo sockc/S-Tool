@@ -21,6 +21,8 @@ public final class FeaturePrefs {
             "_universal_app_scope_migrated_v1";
     private static final String KEY_UNIVERSAL_INDEPENDENT_MIGRATED =
             "_universal_independent_migrated_v1";
+    private static final String KEY_GAODE_MINIMAL_HOME_MIGRATED =
+            "_gaode_minimal_home_migrated_v1";
 
     private FeaturePrefs() {
     }
@@ -55,6 +57,9 @@ public final class FeaturePrefs {
                 preferences
         );
         migrateIndependentUniversalCapabilities(
+                preferences
+        );
+        migrateGaodeMinimalHome(
                 preferences
         );
 
@@ -228,6 +233,49 @@ public final class FeaturePrefs {
                 KEY_UNIVERSAL_INDEPENDENT_MIGRATED,
                 true
         );
+        editor.commit();
+    }
+
+    static void migrateGaodeMinimalHome(
+            SharedPreferences preferences
+    ) {
+        if (preferences.getBoolean(
+                KEY_GAODE_MINIMAL_HOME_MIGRATED,
+                false
+        )) {
+            return;
+        }
+
+        SharedPreferences.Editor editor =
+                preferences.edit();
+
+        // Safety migration after V1.4.3/1.4.3.1 splash regressions:
+        // never carry the old startup-chain ad switch forward.
+        editor.putBoolean(
+                "gaode.ad_skip",
+                false
+        );
+
+        editor.putBoolean(
+                "gaode.minimal_home",
+                true
+        );
+
+        editor.remove(
+                "gaode.explore_local"
+        );
+        editor.remove(
+                "gaode.bottom_tabs"
+        );
+        editor.remove(
+                "gaode.float_badges"
+        );
+
+        editor.putBoolean(
+                KEY_GAODE_MINIMAL_HOME_MIGRATED,
+                true
+        );
+
         editor.commit();
     }
 
