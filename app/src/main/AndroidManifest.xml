@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
     <queries>
         <package android:name="com.autonavi.minimap" />
         <package android:name="com.ganji.android.haoche" />
@@ -27,6 +29,10 @@
         android:label="S Tool"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <activity
+            android:name=".AppSelectorActivity"
+            android:exported="false" />
 
         <activity
             android:name=".MainActivity"
