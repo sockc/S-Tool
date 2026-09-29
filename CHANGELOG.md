@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.0
+
+### Management
+- Add a launcher management panel for S Tool.
+- Add independent enable/disable switches for all 19 Hook modules.
+- Add enable-all, disable-all and reset-default actions.
+- Show target app installation/version information.
+- Show enabled-module count and cross-process preference status.
+- Show last configuration change time.
+
+### Hook configuration
+- Add LSPosed XSharedPreferences based cross-process configuration.
+- Explicitly declare `xposedsharedprefs`.
+- Keep all Hook modules enabled by default if shared configuration is unavailable.
+- Apply feature switches during target process startup.
+
+### Version
+- Bump app version to `1.2.0` / versionCode `120`.
+
 ## 1.1.0
 
 ### Security
