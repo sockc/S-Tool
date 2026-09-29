@@ -25,6 +25,8 @@ public final class ConfigProvider extends ContentProvider {
             "report_injection";
     public static final String METHOD_REPORT_HOOK_RESULT =
             "report_hook_result";
+    public static final String METHOD_REPORT_SPLASH_SKIP =
+            "report_splash_skip";
 
     public static final String KEY_PROTOCOL_VERSION =
             "_protocol_version";
@@ -42,8 +44,10 @@ public final class ConfigProvider extends ContentProvider {
             "_summary";
     public static final String KEY_RECORDED =
             "_recorded";
+    public static final String KEY_SCORE =
+            "_score";
 
-    public static final int PROTOCOL_VERSION = 7;
+    public static final int PROTOCOL_VERSION = 8;
 
     @Override
     public boolean onCreate() {
@@ -81,6 +85,12 @@ public final class ConfigProvider extends ContentProvider {
 
         if (METHOD_REPORT_HOOK_RESULT.equals(method)) {
             return recordHookResult(
+                    extras
+            );
+        }
+
+        if (METHOD_REPORT_SPLASH_SKIP.equals(method)) {
+            return recordSplashSkip(
                     extras
             );
         }
@@ -290,6 +300,57 @@ public final class ConfigProvider extends ContentProvider {
         return result;
     }
 
+    private Bundle recordSplashSkip(
+            Bundle extras
+    ) {
+        Bundle result =
+                new Bundle();
+
+        result.putBoolean(
+                KEY_RECORDED,
+                false
+        );
+
+        Context context =
+                getContext();
+
+        if (context == null
+                || extras == null) {
+            return result;
+        }
+
+        String packageName =
+                extras.getString(
+                        KEY_PACKAGE_NAME
+                );
+
+        if (!callerOwnsPackage(
+                context,
+                packageName
+        )) {
+            return result;
+        }
+
+        int score =
+                extras.getInt(
+                        KEY_SCORE,
+                        0
+                );
+
+        SplashSkipStatus.recordSuccess(
+                context,
+                packageName,
+                score
+        );
+
+        result.putBoolean(
+                KEY_RECORDED,
+                true
+        );
+
+        return result;
+    }
+
     private boolean callerOwnsPackage(
             Context context,
             String packageName
@@ -424,6 +485,48 @@ public final class ConfigProvider extends ContentProvider {
                             .call(
                                     CONTENT_URI,
                                     METHOD_REPORT_HOOK_RESULT,
+                                    null,
+                                    extras
+                            );
+
+            return result != null
+                    && result.getBoolean(
+                    KEY_RECORDED,
+                    false
+            );
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static boolean reportSplashSkip(
+            Context context,
+            String packageName,
+            int score
+    ) {
+        if (context == null
+                || packageName == null) {
+            return false;
+        }
+
+        try {
+            Bundle extras =
+                    new Bundle();
+
+            extras.putString(
+                    KEY_PACKAGE_NAME,
+                    packageName
+            );
+            extras.putInt(
+                    KEY_SCORE,
+                    score
+            );
+
+            Bundle result =
+                    context.getContentResolver()
+                            .call(
+                                    CONTENT_URI,
+                                    METHOD_REPORT_SPLASH_SKIP,
                                     null,
                                     extras
                             );
