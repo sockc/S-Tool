@@ -1,7 +1,9 @@
 package com.sockc.unicomhook;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -99,25 +101,21 @@ final class ScopeServiceBridge {
     static void addListener(
             ServiceListener listener
     ) {
-        if (listener == null) {
-            return;
+        if (listener != null) {
+            listeners.add(
+                    listener
+            );
         }
-
-        listeners.add(
-                listener
-        );
     }
 
     static void removeListener(
             ServiceListener listener
     ) {
-        if (listener == null) {
-            return;
+        if (listener != null) {
+            listeners.remove(
+                    listener
+            );
         }
-
-        listeners.remove(
-                listener
-        );
     }
 
     static Set<String> getScopeSnapshot() {
@@ -204,31 +202,55 @@ final class ScopeServiceBridge {
             return;
         }
 
-        if (isInScope(
-                packageName
-        )) {
-            notifyRequest(
-                    listener,
-                    packageName,
-                    RequestState.APPROVED,
-                    null
-            );
-            return;
-        }
+        requestScopes(
+                Collections.singletonList(
+                        packageName
+                ),
+                listener
+        );
+    }
 
-        RequestState currentState =
-                requestStates.get(
+    static void requestScopes(
+            List<String> packageNames,
+            RequestListener listener
+    ) {
+        LinkedHashSet<String> pending =
+                new LinkedHashSet<>();
+
+        if (packageNames != null) {
+            for (String packageName
+                    : packageNames) {
+                if (packageName == null
+                        || packageName.trim().isEmpty()
+                        || isInScope(
+                        packageName
+                )) {
+                    continue;
+                }
+
+                pending.add(
                         packageName
                 );
+            }
+        }
 
-        if (currentState
-                == RequestState.REQUESTING) {
-            notifyRequest(
-                    listener,
-                    packageName,
-                    RequestState.REQUESTING,
-                    null
-            );
+        if (pending.isEmpty()) {
+            if (packageNames != null) {
+                for (String packageName
+                        : packageNames) {
+                    if (packageName != null
+                            && isInScope(
+                            packageName
+                    )) {
+                        notifyRequest(
+                                listener,
+                                packageName,
+                                RequestState.APPROVED,
+                                null
+                        );
+                    }
+                }
+            }
             return;
         }
 
@@ -236,139 +258,129 @@ final class ScopeServiceBridge {
                 service;
 
         if (current == null) {
+            for (String packageName
+                    : pending) {
+                requestStates.put(
+                        packageName,
+                        RequestState.FAILED
+                );
+
+                notifyRequest(
+                        listener,
+                        packageName,
+                        RequestState.FAILED,
+                        "LSPosed Scope Service 未连接"
+                );
+            }
+            return;
+        }
+
+        for (String packageName
+                : pending) {
             requestStates.put(
                     packageName,
-                    RequestState.FAILED
+                    RequestState.REQUESTING
             );
 
             notifyRequest(
                     listener,
                     packageName,
-                    RequestState.FAILED,
-                    "LSPosed Scope Service 未连接"
+                    RequestState.REQUESTING,
+                    null
             );
-            return;
         }
 
-        requestStates.put(
-                packageName,
-                RequestState.REQUESTING
-        );
-
-        notifyRequest(
-                listener,
-                packageName,
-                RequestState.REQUESTING,
-                null
-        );
+        List<String> requested =
+                new ArrayList<>(
+                        pending
+                );
 
         try {
             current.requestScope(
-                    packageName,
+                    requested,
                     new XposedService.OnScopeEventListener() {
                         @Override
-                        public void onScopeRequestPrompted(
-                                String requestedPackage
-                        ) {
-                            requestStates.put(
-                                    requestedPackage,
-                                    RequestState.REQUESTING
-                            );
-
-                            notifyRequest(
-                                    listener,
-                                    requestedPackage,
-                                    RequestState.REQUESTING,
-                                    null
-                            );
-                        }
-
-                        @Override
                         public void onScopeRequestApproved(
-                                String requestedPackage
+                                List<String> approved
                         ) {
-                            requestStates.put(
-                                    requestedPackage,
-                                    RequestState.APPROVED
-                            );
+                            Set<String> approvedSet =
+                                    approved == null
+                                            ? Collections.emptySet()
+                                            : new HashSet<>(
+                                            approved
+                                    );
 
                             refreshScope();
 
-                            notifyRequest(
-                                    listener,
-                                    requestedPackage,
-                                    RequestState.APPROVED,
-                                    null
-                            );
+                            for (String packageName
+                                    : requested) {
+                                boolean accepted =
+                                        approvedSet.contains(
+                                                packageName
+                                        )
+                                                || isInScope(
+                                                packageName
+                                        );
+
+                                RequestState state =
+                                        accepted
+                                                ? RequestState.APPROVED
+                                                : RequestState.DENIED;
+
+                                requestStates.put(
+                                        packageName,
+                                        state
+                                );
+
+                                notifyRequest(
+                                        listener,
+                                        packageName,
+                                        state,
+                                        accepted
+                                                ? null
+                                                : "作用域未获批准；S Tool 选择已保留"
+                                );
+                            }
 
                             notifyServiceListeners();
                         }
 
                         @Override
-                        public void onScopeRequestDenied(
-                                String requestedPackage
-                        ) {
-                            requestStates.put(
-                                    requestedPackage,
-                                    RequestState.DENIED
-                            );
-
-                            notifyRequest(
-                                    listener,
-                                    requestedPackage,
-                                    RequestState.DENIED,
-                                    "作用域请求被拒绝或已设为不再询问"
-                            );
-                        }
-
-                        @Override
-                        public void onScopeRequestTimeout(
-                                String requestedPackage
-                        ) {
-                            requestStates.put(
-                                    requestedPackage,
-                                    RequestState.TIMEOUT
-                            );
-
-                            notifyRequest(
-                                    listener,
-                                    requestedPackage,
-                                    RequestState.TIMEOUT,
-                                    "作用域请求已超时"
-                            );
-                        }
-
-                        @Override
                         public void onScopeRequestFailed(
-                                String requestedPackage,
                                 String message
                         ) {
-                            requestStates.put(
-                                    requestedPackage,
-                                    RequestState.FAILED
-                            );
+                            for (String packageName
+                                    : requested) {
+                                requestStates.put(
+                                        packageName,
+                                        RequestState.FAILED
+                                );
 
-                            notifyRequest(
-                                    listener,
-                                    requestedPackage,
-                                    RequestState.FAILED,
-                                    message
-                            );
+                                notifyRequest(
+                                        listener,
+                                        packageName,
+                                        RequestState.FAILED,
+                                        message
+                                );
+                            }
                         }
                     }
             );
         } catch (Throwable throwable) {
-            requestStates.put(
-                    packageName,
-                    RequestState.FAILED
-            );
+            for (String packageName
+                    : requested) {
+                requestStates.put(
+                        packageName,
+                        RequestState.FAILED
+                );
 
-            notifyRequest(
-                    listener,
-                    packageName,
-                    RequestState.FAILED,
-                    throwable.getMessage()
-            );
+                notifyRequest(
+                        listener,
+                        packageName,
+                        RequestState.FAILED,
+                        throwable.getMessage()
+                );
+            }
         }
     }
 
