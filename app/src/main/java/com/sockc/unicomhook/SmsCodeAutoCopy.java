@@ -46,6 +46,75 @@ public class SmsCodeAutoCopy {
     private static final Handler sMainHandler = new Handler(Looper.getMainLooper());
     private static Runnable sPendingSmsScan;
 
+    public static synchronized boolean handleExternalText(
+            Context context,
+            String source,
+            CharSequence text
+    ) {
+        if (context == null
+                || TextUtils.isEmpty(text)) {
+            return false;
+        }
+
+        if (sAppContext == null) {
+            sAppContext =
+                    context.getApplicationContext();
+        }
+
+        String code =
+                extractCode(
+                        text.toString()
+                );
+
+        if (TextUtils.isEmpty(code)) {
+            XposedBridge.log(
+                    TAG
+                            + "外部文本未识别到验证码 source="
+                            + source
+                            + ", body="
+                            + safe(
+                            text.toString()
+                    )
+            );
+            return false;
+        }
+
+        long now =
+                System.currentTimeMillis();
+
+        if (code.equals(
+                sLastCopiedCode
+        )
+                && now - sLastCopyTime
+                < 120000L) {
+            XposedBridge.log(
+                    TAG
+                            + "外部验证码重复，跳过 source="
+                            + source
+            );
+            return true;
+        }
+
+        if (!copyToClipboard(
+                code
+        )) {
+            return false;
+        }
+
+        sLastCopiedCode =
+                code;
+        sLastCopyTime =
+                now;
+
+        XposedBridge.log(
+                TAG
+                        + "外部验证码已复制 source="
+                        + source
+        );
+
+        return true;
+    }
+
     public static synchronized void start(Context context) {
         if (context == null) return;
 
@@ -268,12 +337,15 @@ public class SmsCodeAutoCopy {
             return;
         }
 
-        copyToClipboard(code);
+        if (!copyToClipboard(code)) {
+            return;
+        }
+
         sLastCopiedCode = code;
         sLastCopyTime = now;
 
         XposedBridge.log(TAG + "已复制验证码, source=" + source);
-        Toast.makeText(sAppContext, "验证码已复制: " + code, Toast.LENGTH_SHORT).show();
+        Toast.makeText(sAppContext, "验证码已复制", Toast.LENGTH_SHORT).show();
 
         if (MARK_SMS_AS_READ && smsId > 0) {
             markSmsAsRead(smsId);
@@ -300,41 +372,182 @@ public class SmsCodeAutoCopy {
         }
     }
 
-    private static String extractCode(String body) {
-        if (TextUtils.isEmpty(body)) return null;
+    static String extractCode(
+            String body
+    ) {
+        if (TextUtils.isEmpty(body)) {
+            return null;
+        }
 
-        Pattern p1 = Pattern.compile(
-                "(?:验证码|校验码|动态码|驗證碼|verification code|code|otp)\\D{0,12}([0-9]{4,8})",
-                Pattern.CASE_INSENSITIVE
-        );
-        Matcher m1 = p1.matcher(body);
-        if (m1.find()) return m1.group(1);
+        String keyword =
+                "(?:验证码|校验码|动态码|安全码|驗證碼|認證碼|"
+                        + "verification(?:\\s+code)?|security\\s+code|"
+                        + "passcode|one[-\\s]?time(?:\\s+password)?|otp|code)";
 
-        Pattern p2 = Pattern.compile(
-                "\\b([0-9]{4,8})\\b\\D{0,12}(?:验证码|校验码|动态码|驗證碼|code|otp)",
-                Pattern.CASE_INSENSITIVE
-        );
-        Matcher m2 = p2.matcher(body);
-        if (m2.find()) return m2.group(1);
+        Pattern numericAfter =
+                Pattern.compile(
+                        keyword
+                                + "[^A-Za-z0-9]{0,18}"
+                                + "([0-9]{3}[ -]?[0-9]{3}|[0-9]{4,8})",
+                        Pattern.CASE_INSENSITIVE
+                );
+
+        Matcher matcher =
+                numericAfter.matcher(body);
+
+        if (matcher.find()) {
+            return normalizeCode(
+                    matcher.group(1)
+            );
+        }
+
+        Pattern numericBefore =
+                Pattern.compile(
+                        "\\b([0-9]{3}[ -]?[0-9]{3}|[0-9]{4,8})\\b"
+                                + "[^A-Za-z0-9]{0,18}"
+                                + keyword,
+                        Pattern.CASE_INSENSITIVE
+                );
+
+        matcher =
+                numericBefore.matcher(body);
+
+        if (matcher.find()) {
+            return normalizeCode(
+                    matcher.group(1)
+            );
+        }
+
+        Pattern alphaNumericAfter =
+                Pattern.compile(
+                        keyword
+                                + "[^A-Za-z0-9]{0,18}"
+                                + "\\b([A-Z0-9]{4,10})\\b",
+                        Pattern.CASE_INSENSITIVE
+                );
+
+        matcher =
+                alphaNumericAfter.matcher(body);
+
+        if (matcher.find()) {
+            String candidate =
+                    matcher.group(1);
+
+            if (containsDigit(candidate)
+                    && containsLetter(candidate)) {
+                return candidate
+                        .toUpperCase(
+                                java.util.Locale.US
+                        );
+            }
+        }
 
         if (ALLOW_LOOSE_NUMERIC_MATCH) {
-            Pattern p3 = Pattern.compile("\\b([0-9]{4,8})\\b");
-            Matcher m3 = p3.matcher(body);
-            if (m3.find()) return m3.group(1);
+            Pattern loose =
+                    Pattern.compile(
+                            "\\b([0-9]{4,8})\\b"
+                    );
+            Matcher looseMatcher =
+                    loose.matcher(body);
+
+            if (looseMatcher.find()) {
+                return looseMatcher.group(1);
+            }
         }
 
         return null;
     }
 
-    private static void copyToClipboard(String code) {
-        ClipboardManager cm = (ClipboardManager) sAppContext.getSystemService(Context.CLIPBOARD_SERVICE);
-        if (cm == null) {
-            XposedBridge.log(TAG + "ClipboardManager 为空");
-            return;
+    private static String normalizeCode(
+            String value
+    ) {
+        if (value == null) {
+            return null;
         }
 
-        ClipData clip = ClipData.newPlainText("sms_code", code);
-        cm.setPrimaryClip(clip);
+        return value.replace(
+                " ",
+                ""
+        ).replace(
+                "-",
+                ""
+        );
+    }
+
+    private static boolean containsDigit(
+            String value
+    ) {
+        for (int i = 0;
+                value != null
+                        && i < value.length();
+                i++) {
+            if (Character.isDigit(
+                    value.charAt(i)
+            )) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean containsLetter(
+            String value
+    ) {
+        for (int i = 0;
+                value != null
+                        && i < value.length();
+                i++) {
+            if (Character.isLetter(
+                    value.charAt(i)
+            )) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean copyToClipboard(
+            String code
+    ) {
+        if (sAppContext == null) {
+            return false;
+        }
+
+        try {
+            ClipboardManager cm =
+                    (ClipboardManager)
+                            sAppContext.getSystemService(
+                                    Context.CLIPBOARD_SERVICE
+                            );
+
+            if (cm == null) {
+                XposedBridge.log(
+                        TAG
+                                + "ClipboardManager 为空"
+                );
+                return false;
+            }
+
+            ClipData clip =
+                    ClipData.newPlainText(
+                            "sms_code",
+                            code
+                    );
+
+            cm.setPrimaryClip(
+                    clip
+            );
+            return true;
+        } catch (Throwable throwable) {
+            XposedBridge.log(
+                    TAG
+                            + "写入剪贴板失败: "
+                            + throwable
+            );
+            return false;
+        }
     }
 
     private static void trimHandledIdSet(long keepId) {
