@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.4.2
+
+### OTP auto-copy V2
+- Add NotificationListenerService as the primary OTP capture channel.
+- Keep Google Messages SMS broadcast / provider observation as a fallback channel.
+- Share duplicate suppression across notification and SMS paths.
+- Expand contextual OTP recognition while keeping loose arbitrary-number matching disabled.
+- Add a manager status/action for Notification Listener access.
+
+### Gaode R2
+- Add targeted UI fingerprint diagnostics: Activity, View class, resource name, and parent chain.
+- Add resource/class identity fallbacks for Explore Local, bottom tabs and operation badges.
+- Keep text scanning as fallback rather than the only matching mechanism.
+- Deduplicate diagnostic fingerprints to avoid log flooding.
+
+### OPlus / ColorOS Game Assistant R2
+- Remove the late second Application.attach Hook that could miss the current attach event.
+- Try MMKV Hook directly from the package class loader.
+- Retry from Application.onCreate only when MMKV is not ready yet.
+- Add MMKV key-name diagnostics without logging stored values.
+- Recognize com.oplus.games, com.coloros.gamespaceui and com.coloros.gamespace.
+
+### Scope diagnostics
+- Show dedicated-app LSPosed Scope state in app enhancement cards.
+- Allow tapping missing-Scope status to issue a native LSPosed Scope Request.
+- Refresh Scope snapshot on manager resume.
+
+### Stability
+- Remove Airvoy's late Application.attach Hook and track target Activity lifecycle directly.
+- Preserve per-Hook failure isolation from previous releases.
+
+### Version
+- Bump app version to `1.4.2` / versionCode `142`.
+
 ## 1.4.0
 
 ### Universal privacy stage 2
