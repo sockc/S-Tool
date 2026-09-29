@@ -23,7 +23,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import de.robv.android.xposed.XposedBridge;
+import com.sockc.unicomhook.compat.XposedBridge;
 
 public class SmsCodeAutoCopy {
     private static final String TAG = "Sockc_SmsCode: ";
