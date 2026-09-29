@@ -7,12 +7,10 @@ import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Set;
 
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XposedBridge;
 
-public class OplusGameHook implements IXposedHookLoadPackage {
+public class OplusGameHook implements HookModule {
     private static final String TAG = "OplusGameHook";
     private static final String TARGET = "com.oplus.games";
 
@@ -27,7 +25,7 @@ public class OplusGameHook implements IXposedHookLoadPackage {
             "[{\"conditionSet\":[],\"result\":{\"functionEnabled\":1},\"ext\":{\"default_open_list\":[\"0\",\"1\",\"2\",\"3\",\"4\"]}}]";
 
     @Override
-    public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) {
+    public void handleLoadPackage(final LoadPackageParam lpparam) {
         if (!TARGET.equals(lpparam.packageName)) return;
 
         XposedBridge.log(TAG + ": loaded " + lpparam.packageName);

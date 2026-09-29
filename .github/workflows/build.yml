@@ -32,7 +32,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.2'
+          gradle-version: '8.13'
 
       - name: Restore stable signing keystore
         if: env.SIGNING_KEY_BASE64 != ''
@@ -77,7 +77,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.2'
+          gradle-version: '8.13'
 
       - name: Validate signing secrets
         run: |

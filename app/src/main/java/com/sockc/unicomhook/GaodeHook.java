@@ -14,13 +14,11 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XposedBridge;
+import com.sockc.unicomhook.compat.XposedHelpers;
 
-public class GaodeHook implements IXposedHookLoadPackage {
+public class GaodeHook implements HookModule {
 
     private static final String TAG = "Sockc_Gaode: ";
     private static final String TARGET_PACKAGE = "com.autonavi.minimap";

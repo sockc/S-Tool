@@ -14,14 +14,12 @@ import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.widget.TextView;
 
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XC_MethodReplacement;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XC_MethodReplacement;
+import com.sockc.unicomhook.compat.XposedBridge;
+import com.sockc.unicomhook.compat.XposedHelpers;
 
-public class UnicomHook implements IXposedHookLoadPackage {
+public class UnicomHook implements HookModule {
 
     private static final String TAG = "SockcHook: ";
     private static final String TARGET_PACKAGE =

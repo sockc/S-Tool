@@ -4,8 +4,8 @@ import android.app.Activity;
 import android.content.ContentResolver;
 import android.net.Uri;
 
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XposedBridge;
 
 final class ScreenshotPrivacyEngine {
 

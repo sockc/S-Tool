@@ -3,39 +3,29 @@ package com.sockc.unicomhook;
 import android.content.Context;
 import android.os.Bundle;
 
-import de.robv.android.xposed.XSharedPreferences;
-import de.robv.android.xposed.XposedBridge;
+import com.sockc.unicomhook.compat.XposedBridge;
 
 final class HookConfig {
 
     private static final String TAG =
             "S-Tool/Config: ";
-    private static final String MODULE_PACKAGE =
-            "com.sockc.unicomhook";
 
     private static volatile HookConfig cached;
 
     private final Bundle providerValues;
-    private final XSharedPreferences legacyPreferences;
-    private final boolean legacyReadable;
 
     private HookConfig(
-            Bundle providerValues,
-            XSharedPreferences legacyPreferences,
-            boolean legacyReadable
+            Bundle providerValues
     ) {
         this.providerValues =
                 providerValues;
-        this.legacyPreferences =
-                legacyPreferences;
-        this.legacyReadable =
-                legacyReadable;
     }
 
     static HookConfig load(
             Context context
     ) {
-        HookConfig existing = cached;
+        HookConfig existing =
+                cached;
 
         if (existing != null) {
             return existing;
@@ -55,77 +45,48 @@ final class HookConfig {
 
             if (providerValues != null) {
                 XposedBridge.log(
-                        TAG + "配置来源=ConfigProvider"
+                        TAG
+                                + "配置来源=ConfigProvider"
                 );
-
-                existing = new HookConfig(
-                        providerValues,
-                        null,
-                        false
+            } else {
+                XposedBridge.log(
+                        TAG
+                                + "ConfigProvider 不可用，使用功能默认值"
                 );
-
-                cached = existing;
-                return existing;
             }
 
-            existing = loadLegacy();
-            cached = existing;
+            existing =
+                    new HookConfig(
+                            providerValues
+                    );
+            cached =
+                    existing;
             return existing;
         }
     }
 
     static HookConfig load() {
-        HookConfig existing = cached;
+        HookConfig existing =
+                cached;
 
         if (existing != null) {
             return existing;
         }
 
-        return loadLegacy();
-    }
+        synchronized (HookConfig.class) {
+            if (cached == null) {
+                cached =
+                        new HookConfig(
+                                null
+                        );
 
-    private static HookConfig loadLegacy() {
-        try {
-            XSharedPreferences preferences =
-                    new XSharedPreferences(
-                            MODULE_PACKAGE,
-                            FeaturePrefs.PREF_FILE
-                    );
-
-            preferences.reload();
-
-            boolean readable =
-                    preferences.getFile() != null
-                            && preferences
-                            .getFile()
-                            .canRead();
-
-            if (readable) {
                 XposedBridge.log(
-                        TAG + "配置来源=legacy XSharedPreferences"
-                );
-            } else {
-                XposedBridge.log(
-                        TAG + "配置桥与 legacy XSharedPreferences 均不可用，使用功能默认值"
+                        TAG
+                                + "尚无目标 Context，使用功能默认值"
                 );
             }
 
-            return new HookConfig(
-                    null,
-                    preferences,
-                    readable
-            );
-        } catch (Throwable throwable) {
-            XposedBridge.log(
-                    TAG + "配置读取失败，使用功能默认值: "
-                            + throwable
-            );
-
-            return new HookConfig(
-                    null,
-                    null,
-                    false
-            );
+            return cached;
         }
     }
 
@@ -157,14 +118,17 @@ final class HookConfig {
             return result;
         } catch (Throwable throwable) {
             XposedBridge.log(
-                    TAG + "ConfigProvider 读取失败: "
+                    TAG
+                            + "ConfigProvider 读取失败: "
                             + throwable
             );
             return null;
         }
     }
 
-    boolean isEnabled(String featureId) {
+    boolean isEnabled(
+            String featureId
+    ) {
         return readBoolean(
                 featureId,
                 FeatureRegistry.defaultEnabled(
@@ -177,28 +141,10 @@ final class HookConfig {
             String featureId,
             String subFeatureId
     ) {
-        if (!isEnabled(featureId)) {
-            return false;
-        }
-
-        if ("unicom.screenshot_privacy".equals(
-                subFeatureId
-        )
-                && providerValues == null
-                && legacyReadable
-                && legacyPreferences != null
-                && !legacyPreferences.contains(
-                subFeatureId
-        )
-                && legacyPreferences.contains(
-                "screenshot_privacy"
+        if (!isEnabled(
+                featureId
         )) {
-            return readBoolean(
-                    "screenshot_privacy",
-                    FeatureRegistry.defaultEnabled(
-                            subFeatureId
-                    )
-            );
+            return false;
         }
 
         return readBoolean(
@@ -241,29 +187,15 @@ final class HookConfig {
             boolean defaultValue
     ) {
         if (providerValues != null
-                && providerValues.containsKey(key)) {
+                && providerValues.containsKey(
+                key
+        )) {
             return providerValues.getBoolean(
                     key,
                     defaultValue
             );
         }
 
-        if (!legacyReadable
-                || legacyPreferences == null) {
-            return defaultValue;
-        }
-
-        try {
-            return legacyPreferences.getBoolean(
-                    key,
-                    defaultValue
-            );
-        } catch (Throwable throwable) {
-            XposedBridge.log(
-                    TAG + "读取 " + key + " 失败，使用默认值: "
-                            + throwable
-            );
-            return defaultValue;
-        }
+        return defaultValue;
     }
 }

@@ -1,6 +1,7 @@
 package com.sockc.unicomhook;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -8,6 +9,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
@@ -27,14 +29,32 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
-public final class AppSelectorActivity extends Activity {
+public final class AppSelectorActivity
+        extends Activity {
 
     public static final String EXTRA_CAPABILITY_ID =
             "capability_id";
+
+    private static final int FILTER_ALL = 0;
+    private static final int FILTER_SELECTED = 1;
+    private static final int FILTER_NEEDS_SCOPE = 2;
+
+    private static final long APP_CACHE_TTL_MS =
+            60_000L;
+
+    private static final Object APP_CACHE_LOCK =
+            new Object();
+
+    private static List<AppItem> cachedApps =
+            Collections.emptyList();
+
+    private static long cachedAppsAt;
 
     private static final int COLOR_BG =
             Color.rgb(246, 247, 249);
@@ -50,8 +70,6 @@ public final class AppSelectorActivity extends Activity {
             Color.rgb(26, 143, 86);
     private static final int COLOR_WARN =
             Color.rgb(197, 119, 0);
-    private static final int COLOR_SUBCARD =
-            Color.rgb(248, 249, 251);
 
     private static final class AppItem {
         final String label;
@@ -72,6 +90,8 @@ public final class AppSelectorActivity extends Activity {
     private SharedPreferences preferences;
     private boolean crossProcessAvailable;
     private String capabilityId;
+    private int filterMode =
+            FILTER_ALL;
 
     private final List<AppItem> allApps =
             new ArrayList<>();
@@ -82,6 +102,9 @@ public final class AppSelectorActivity extends Activity {
     private Switch masterSwitch;
     private TextView selectedSummary;
     private TextView bridgeStatus;
+
+    private ScopeServiceBridge.ServiceListener
+            scopeServiceListener;
 
     @Override
     protected void onCreate(
@@ -121,11 +144,34 @@ public final class AppSelectorActivity extends Activity {
         crossProcessAvailable =
                 openResult.crossProcessAvailable;
 
+        scopeServiceListener =
+                () -> runOnUiThread(
+                        () -> {
+                            if (isFinishing()
+                                    || isDestroyed()) {
+                                return;
+                            }
+
+                            refreshBridgeStatus();
+                            refreshSelectedSummary();
+                            rebuildAppList();
+                        }
+                );
+
+        ScopeServiceBridge.addListener(
+                scopeServiceListener
+        );
+        ScopeServiceBridge.initialize();
+        ScopeServiceBridge.refreshScope();
+
         loadInstalledApps();
+
         setContentView(
                 buildContent()
         );
+
         refreshMasterState();
+        refreshBridgeStatus();
         refreshSelectedSummary();
         rebuildAppList();
     }
@@ -134,10 +180,21 @@ public final class AppSelectorActivity extends Activity {
     protected void onResume() {
         super.onResume();
 
+        ScopeServiceBridge.refreshScope();
+
         if (appContainer != null) {
-            rebuildAppList();
+            refreshBridgeStatus();
             refreshSelectedSummary();
+            rebuildAppList();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        ScopeServiceBridge.removeListener(
+                scopeServiceListener
+        );
+        super.onDestroy();
     }
 
     private View buildContent() {
@@ -229,15 +286,18 @@ public final class AppSelectorActivity extends Activity {
                 topMargin(dp(18))
         );
 
-        appContainer = vertical();
+        appContainer =
+                vertical();
+
         root.addView(
                 appContainer,
                 topMargin(dp(8))
         );
 
         TextView footer = text(
-                "S Tool 中选中 App 只是保存保护配置；目标 App 仍需在 LSPosed 的 S Tool 作用域中勾选。"
-                        + " “尚无注入记录”表示更新后还没有记录到该 App 启动。",
+                "选择 App 后，S Tool 会检查 LSPosed 的真实 Scope；"
+                        + "未加入时会直接发起 LSPosed 原生“作用域请求”，无需进入管理器手动勾选。"
+                        + "取消保护只会取消本功能配置，不会擅自移除 LSPosed Scope。",
                 12,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -246,6 +306,7 @@ public final class AppSelectorActivity extends Activity {
                 0,
                 1.18f
         );
+
         root.addView(
                 footer,
                 topMargin(dp(18))
@@ -255,10 +316,12 @@ public final class AppSelectorActivity extends Activity {
     }
 
     private View buildMasterCard() {
-        LinearLayout card = card();
+        LinearLayout card =
+                card();
 
         LinearLayout row =
                 new LinearLayout(this);
+
         row.setOrientation(
                 LinearLayout.HORIZONTAL
         );
@@ -266,7 +329,8 @@ public final class AppSelectorActivity extends Activity {
                 Gravity.CENTER_VERTICAL
         );
 
-        LinearLayout copy = vertical();
+        LinearLayout copy =
+                vertical();
 
         TextView title = text(
                 "总开关",
@@ -277,15 +341,12 @@ public final class AppSelectorActivity extends Activity {
         copy.addView(title);
 
         bridgeStatus = text(
-                crossProcessAvailable
-                        ? "跨进程配置桥可用"
-                        : "跨进程配置桥不可用",
+                "",
                 12,
-                crossProcessAvailable
-                        ? COLOR_OK
-                        : COLOR_WARN,
+                COLOR_SUBTEXT,
                 Typeface.NORMAL
         );
+
         copy.addView(
                 bridgeStatus,
                 topMargin(dp(3))
@@ -302,9 +363,11 @@ public final class AppSelectorActivity extends Activity {
 
         masterSwitch =
                 new Switch(this);
+
         masterSwitch.setEnabled(
                 crossProcessAvailable
         );
+
         masterSwitch.setOnCheckedChangeListener(
                 (buttonView, isChecked) -> {
                     if (!buttonView.isPressed()) {
@@ -325,17 +388,21 @@ public final class AppSelectorActivity extends Activity {
                 }
         );
 
-        row.addView(masterSwitch);
+        row.addView(
+                masterSwitch
+        );
         card.addView(row);
 
         return card;
     }
 
     private View buildFilterCard() {
-        LinearLayout card = card();
+        LinearLayout card =
+                card();
 
         searchInput =
                 new EditText(this);
+
         searchInput.setHint(
                 "搜索应用或包名"
         );
@@ -344,6 +411,7 @@ public final class AppSelectorActivity extends Activity {
         searchInput.setImeOptions(
                 EditorInfo.IME_ACTION_DONE
         );
+
         searchInput.addTextChangedListener(
                 new TextWatcher() {
                     @Override
@@ -372,10 +440,14 @@ public final class AppSelectorActivity extends Activity {
                     }
                 }
         );
-        card.addView(searchInput);
+
+        card.addView(
+                searchInput
+        );
 
         LinearLayout options =
                 new LinearLayout(this);
+
         options.setOrientation(
                 LinearLayout.HORIZONTAL
         );
@@ -390,6 +462,7 @@ public final class AppSelectorActivity extends Activity {
         );
         showSystemSwitch.setTextSize(12);
         showSystemSwitch.setChecked(false);
+
         showSystemSwitch.setOnCheckedChangeListener(
                 (buttonView, isChecked) ->
                         rebuildAppList()
@@ -408,11 +481,13 @@ public final class AppSelectorActivity extends Activity {
                 actionButton(
                         "全选当前"
                 );
+
         selectVisible.setOnClickListener(
                 view -> setVisibleSelections(
                         true
                 )
         );
+
         options.addView(
                 selectVisible
         );
@@ -421,9 +496,11 @@ public final class AppSelectorActivity extends Activity {
                 actionButton(
                         "清空"
                 );
+
         clear.setOnClickListener(
                 view -> clearSelections()
         );
+
         options.addView(
                 clear
         );
@@ -433,10 +510,89 @@ public final class AppSelectorActivity extends Activity {
                 topMargin(dp(8))
         );
 
+        LinearLayout filters =
+                new LinearLayout(this);
+
+        filters.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
+
+        filters.addView(
+                filterButton(
+                        "全部",
+                        FILTER_ALL
+                ),
+                weightedButtonParams(
+                        1f,
+                        0
+                )
+        );
+
+        filters.addView(
+                filterButton(
+                        "已选择",
+                        FILTER_SELECTED
+                ),
+                weightedButtonParams(
+                        1f,
+                        dp(6)
+                )
+        );
+
+        filters.addView(
+                filterButton(
+                        "待 Scope",
+                        FILTER_NEEDS_SCOPE
+                ),
+                weightedButtonParams(
+                        1f,
+                        dp(6)
+                )
+        );
+
+        card.addView(
+                filters,
+                topMargin(dp(6))
+        );
+
         return card;
     }
 
+    private Button filterButton(
+            String value,
+            int mode
+    ) {
+        Button button =
+                actionButton(
+                        value
+                );
+
+        button.setOnClickListener(
+                view -> {
+                    filterMode =
+                            mode;
+                    rebuildAppList();
+                }
+        );
+
+        return button;
+    }
+
     private void loadInstalledApps() {
+        long now =
+                SystemClock.elapsedRealtime();
+
+        synchronized (APP_CACHE_LOCK) {
+            if (!cachedApps.isEmpty()
+                    && now - cachedAppsAt
+                    < APP_CACHE_TTL_MS) {
+                allApps.addAll(
+                        cachedApps
+                );
+                return;
+            }
+        }
+
         PackageManager packageManager =
                 getPackageManager();
 
@@ -452,6 +608,9 @@ public final class AppSelectorActivity extends Activity {
             applications =
                     Collections.emptyList();
         }
+
+        List<AppItem> loaded =
+                new ArrayList<>();
 
         for (ApplicationInfo info
                 : applications) {
@@ -479,7 +638,7 @@ public final class AppSelectorActivity extends Activity {
                             & ApplicationInfo.FLAG_SYSTEM)
                             != 0;
 
-            allApps.add(
+            loaded.add(
                     new AppItem(
                             label.isEmpty()
                                     ? info.packageName
@@ -491,7 +650,7 @@ public final class AppSelectorActivity extends Activity {
         }
 
         Collections.sort(
-                allApps,
+                loaded,
                 Comparator.comparing(
                         item -> item.label
                                 .toLowerCase(
@@ -499,6 +658,21 @@ public final class AppSelectorActivity extends Activity {
                                 )
                 )
         );
+
+        allApps.addAll(
+                loaded
+        );
+
+        synchronized (APP_CACHE_LOCK) {
+            cachedApps =
+                    Collections.unmodifiableList(
+                            new ArrayList<>(
+                                    loaded
+                            )
+                    );
+            cachedAppsAt =
+                    now;
+        }
     }
 
     private boolean shouldSkipPackage(
@@ -536,6 +710,7 @@ public final class AppSelectorActivity extends Activity {
                     COLOR_SUBTEXT,
                     Typeface.NORMAL
             );
+
             appContainer.addView(
                     empty,
                     topMargin(dp(8))
@@ -543,14 +718,77 @@ public final class AppSelectorActivity extends Activity {
             return;
         }
 
+        List<AppItem> selected =
+                new ArrayList<>();
+        List<AppItem> other =
+                new ArrayList<>();
+
         for (AppItem item : visible) {
-            appContainer.addView(
-                    buildAppRow(
-                            item
-                    ),
-                    topMargin(dp(8))
-            );
+            if (isSelected(
+                    item.packageName
+            )) {
+                selected.add(
+                        item
+                );
+            } else {
+                other.add(
+                        item
+                );
+            }
         }
+
+        if (!selected.isEmpty()) {
+            appContainer.addView(
+                    sectionLabel(
+                            "已选择 "
+                                    + selected.size()
+                    )
+            );
+
+            for (AppItem item : selected) {
+                appContainer.addView(
+                        buildAppRow(
+                                item
+                        ),
+                        topMargin(dp(8))
+                );
+            }
+        }
+
+        if (!other.isEmpty()) {
+            appContainer.addView(
+                    sectionLabel(
+                            selected.isEmpty()
+                                    ? "应用"
+                                    : "其他应用"
+                    ),
+                    topMargin(
+                            selected.isEmpty()
+                                    ? 0
+                                    : dp(14)
+                    )
+            );
+
+            for (AppItem item : other) {
+                appContainer.addView(
+                        buildAppRow(
+                                item
+                        ),
+                        topMargin(dp(8))
+                );
+            }
+        }
+    }
+
+    private TextView sectionLabel(
+            String value
+    ) {
+        return text(
+                value,
+                13,
+                COLOR_SUBTEXT,
+                Typeface.BOLD
+        );
     }
 
     private List<AppItem> filteredApps() {
@@ -574,8 +812,14 @@ public final class AppSelectorActivity extends Activity {
                 new ArrayList<>();
 
         for (AppItem item : allApps) {
+            boolean selected =
+                    isSelected(
+                            item.packageName
+                    );
+
             if (item.system
-                    && !showSystem) {
+                    && !showSystem
+                    && !selected) {
                 continue;
             }
 
@@ -593,8 +837,50 @@ public final class AppSelectorActivity extends Activity {
                 continue;
             }
 
-            result.add(item);
+            if (filterMode
+                    == FILTER_SELECTED
+                    && !selected) {
+                continue;
+            }
+
+            if (filterMode
+                    == FILTER_NEEDS_SCOPE
+                    && (!selected
+                    || ScopeServiceBridge.isInScope(
+                    item.packageName
+            ))) {
+                continue;
+            }
+
+            result.add(
+                    item
+            );
         }
+
+        result.sort(
+                (left, right) -> {
+                    boolean leftSelected =
+                            isSelected(
+                                    left.packageName
+                            );
+                    boolean rightSelected =
+                            isSelected(
+                                    right.packageName
+                            );
+
+                    if (leftSelected
+                            != rightSelected) {
+                        return leftSelected
+                                ? -1
+                                : 1;
+                    }
+
+                    return left.label
+                            .compareToIgnoreCase(
+                                    right.label
+                            );
+                }
+        );
 
         return result;
     }
@@ -620,6 +906,7 @@ public final class AppSelectorActivity extends Activity {
 
         GradientDrawable background =
                 new GradientDrawable();
+
         background.setColor(
                 COLOR_CARD
         );
@@ -634,9 +921,18 @@ public final class AppSelectorActivity extends Activity {
                         238
                 )
         );
-        row.setBackground(background);
 
-        LinearLayout copy = vertical();
+        row.setBackground(
+                background
+        );
+
+        boolean selected =
+                isSelected(
+                        item.packageName
+                );
+
+        LinearLayout copy =
+                vertical();
 
         TextView title = text(
                 item.label,
@@ -655,39 +951,20 @@ public final class AppSelectorActivity extends Activity {
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
         );
+
         copy.addView(
                 packageView,
                 topMargin(dp(2))
         );
 
-        long injectedAt =
-                InjectionStatus
-                        .getLastInjectedAt(
-                                this,
-                                item.packageName
-                        );
+        TextView scopeStatus =
+                buildScopeStatusView(
+                        item,
+                        selected
+                );
 
-        TextView injection = text(
-                injectedAt > 0L
-                        ? "✓ 已注入 "
-                        + DateFormat
-                        .getTimeInstance(
-                                DateFormat.SHORT
-                        )
-                        .format(
-                                new Date(
-                                        injectedAt
-                                )
-                        )
-                        : "尚无注入记录 · 请确认 LSPosed Scope",
-                11,
-                injectedAt > 0L
-                        ? COLOR_OK
-                        : COLOR_WARN,
-                Typeface.NORMAL
-        );
         copy.addView(
-                injection,
+                scopeStatus,
                 topMargin(dp(3))
         );
 
@@ -709,11 +986,9 @@ public final class AppSelectorActivity extends Activity {
 
         Switch toggle =
                 new Switch(this);
+
         toggle.setChecked(
-                FeaturePrefs.isEnabled(
-                        preferences,
-                        key
-                )
+                selected
         );
         toggle.setEnabled(
                 crossProcessAvailable
@@ -721,10 +996,6 @@ public final class AppSelectorActivity extends Activity {
 
         toggle.setOnCheckedChangeListener(
                 (buttonView, isChecked) -> {
-                    if (!buttonView.isPressed()) {
-                        return;
-                    }
-
                     boolean saved =
                             FeaturePrefs.setEnabled(
                                     preferences,
@@ -733,9 +1004,13 @@ public final class AppSelectorActivity extends Activity {
                             );
 
                     if (!saved) {
+                        buttonView.setOnCheckedChangeListener(
+                                null
+                        );
                         buttonView.setChecked(
                                 !isChecked
                         );
+
                         Toast.makeText(
                                 this,
                                 "保存失败",
@@ -745,6 +1020,15 @@ public final class AppSelectorActivity extends Activity {
                     }
 
                     refreshSelectedSummary();
+
+                    if (isChecked) {
+                        requestScopeIfNeeded(
+                                item.packageName,
+                                true
+                        );
+                    }
+
+                    rebuildAppList();
                 }
         );
 
@@ -756,9 +1040,194 @@ public final class AppSelectorActivity extends Activity {
                 }
         );
 
-        row.addView(toggle);
+        row.addView(
+                toggle
+        );
 
         return row;
+    }
+
+    private TextView buildScopeStatusView(
+            AppItem item,
+            boolean selected
+    ) {
+        boolean inScope =
+                ScopeServiceBridge.isInScope(
+                        item.packageName
+                );
+
+        ScopeServiceBridge.RequestState state =
+                ScopeServiceBridge.getRequestState(
+                        item.packageName
+                );
+
+        StringBuilder value =
+                new StringBuilder();
+
+        int color =
+                COLOR_SUBTEXT;
+
+        if (inScope) {
+            value.append(
+                    selected
+                            ? "✓ 已在 LSPosed 作用域"
+                            : "✓ Scope 已有 · 当前未选择"
+            );
+            color =
+                    COLOR_OK;
+        } else if (selected) {
+            color =
+                    COLOR_WARN;
+
+            switch (state) {
+                case REQUESTING:
+                    value.append(
+                            "⏳ 等待 LSPosed 作用域授权"
+                    );
+                    break;
+                case DENIED:
+                    value.append(
+                            "⚠ Scope 未授权 · 点此重新请求"
+                    );
+                    break;
+                case TIMEOUT:
+                    value.append(
+                            "⚠ Scope 请求超时 · 点此重试"
+                    );
+                    break;
+                case FAILED:
+                    value.append(
+                            ScopeServiceBridge.isConnected()
+                                    ? "⚠ Scope 请求失败 · 点此重试"
+                                    : "⚠ Scope Service 未连接"
+                    );
+                    break;
+                default:
+                    value.append(
+                            ScopeServiceBridge.isConnected()
+                                    ? "⚠ 尚未加入 Scope · 点此请求"
+                                    : "⏳ Scope Service 连接中"
+                    );
+                    break;
+            }
+        } else {
+            value.append(
+                    ScopeServiceBridge.isConnected()
+                            ? "未选择"
+                            : "Scope 状态暂不可用"
+            );
+        }
+
+        long injectedAt =
+                InjectionStatus
+                        .getLastInjectedAt(
+                                this,
+                                item.packageName
+                        );
+
+        if (injectedAt > 0L) {
+            value.append(
+                    inScope
+                            ? " · 已注入 "
+                            : " · 历史注入 "
+            ).append(
+                    DateFormat
+                            .getTimeInstance(
+                                    DateFormat.SHORT
+                            )
+                            .format(
+                                    new Date(
+                                            injectedAt
+                                    )
+                            )
+            );
+        } else if (inScope) {
+            value.append(
+                    " · 尚无注入记录"
+            );
+        }
+
+        TextView view = text(
+                value.toString(),
+                11,
+                color,
+                Typeface.NORMAL
+        );
+
+        if (selected
+                && !inScope) {
+            view.setClickable(true);
+            view.setOnClickListener(
+                    ignored ->
+                            requestScopeIfNeeded(
+                                    item.packageName,
+                                    true
+                            )
+            );
+        }
+
+        return view;
+    }
+
+    private void requestScopeIfNeeded(
+            String packageName,
+            boolean showFeedback
+    ) {
+        if (ScopeServiceBridge.isInScope(
+                packageName
+        )) {
+            return;
+        }
+
+        ScopeServiceBridge.requestScope(
+                packageName,
+                (requestedPackage,
+                 state,
+                 message) ->
+                        runOnUiThread(
+                                () -> {
+                                    if (isFinishing()
+                                            || isDestroyed()) {
+                                        return;
+                                    }
+
+                                    if (showFeedback) {
+                                        if (state
+                                                == ScopeServiceBridge
+                                                .RequestState.APPROVED) {
+                                            Toast.makeText(
+                                                    this,
+                                                    "已加入 LSPosed 作用域",
+                                                    Toast.LENGTH_SHORT
+                                            ).show();
+                                        } else if (state
+                                                == ScopeServiceBridge
+                                                .RequestState.DENIED) {
+                                            Toast.makeText(
+                                                    this,
+                                                    "Scope 未授权，S Tool 选择已保留",
+                                                    Toast.LENGTH_SHORT
+                                            ).show();
+                                        } else if ((state
+                                                == ScopeServiceBridge
+                                                .RequestState.FAILED
+                                                || state
+                                                == ScopeServiceBridge
+                                                .RequestState.TIMEOUT)
+                                                && message != null) {
+                                            Toast.makeText(
+                                                    this,
+                                                    message,
+                                                    Toast.LENGTH_SHORT
+                                            ).show();
+                                        }
+                                    }
+
+                                    refreshBridgeStatus();
+                                    rebuildAppList();
+                                }
+                        )
+        );
     }
 
     private void setVisibleSelections(
@@ -774,7 +1243,15 @@ public final class AppSelectorActivity extends Activity {
         SharedPreferences.Editor editor =
                 preferences.edit();
 
+        List<String> newlySelected =
+                new ArrayList<>();
+
         for (AppItem item : visible) {
+            boolean wasSelected =
+                    isSelected(
+                            item.packageName
+                    );
+
             editor.putBoolean(
                     FeatureRegistry.universalAppKey(
                             capabilityId,
@@ -782,42 +1259,15 @@ public final class AppSelectorActivity extends Activity {
                     ),
                     enabled
             );
-        }
 
-        editor.putLong(
-                FeaturePrefs.KEY_LAST_CHANGED_AT,
-                System.currentTimeMillis()
-        );
-
-        if (!editor.commit()) {
-            Toast.makeText(
-                    this,
-                    "保存失败",
-                    Toast.LENGTH_SHORT
-            ).show();
-            return;
-        }
-
-        refreshSelectedSummary();
-        rebuildAppList();
-    }
-
-    private void clearSelections() {
-        if (!crossProcessAvailable) {
-            return;
-        }
-
-        SharedPreferences.Editor editor =
-                preferences.edit();
-
-        for (String key
-                : preferences.getAll().keySet()) {
-            if (FeatureRegistry
-                    .isUniversalAppKey(
-                            capabilityId,
-                            key
-                    )) {
-                editor.remove(key);
+            if (enabled
+                    && !wasSelected
+                    && !ScopeServiceBridge.isInScope(
+                    item.packageName
+            )) {
+                newlySelected.add(
+                        item.packageName
+                );
             }
         }
 
@@ -837,6 +1287,165 @@ public final class AppSelectorActivity extends Activity {
 
         refreshSelectedSummary();
         rebuildAppList();
+
+        if (enabled
+                && !newlySelected.isEmpty()) {
+            prepareBatchScopeRequests(
+                    newlySelected
+            );
+        }
+    }
+
+    private void prepareBatchScopeRequests(
+            List<String> packages
+    ) {
+        LinkedHashSet<String> pending =
+                new LinkedHashSet<>();
+
+        for (String packageName : packages) {
+            if (!ScopeServiceBridge.isInScope(
+                    packageName
+            )) {
+                pending.add(
+                        packageName
+                );
+            }
+        }
+
+        if (pending.isEmpty()) {
+            return;
+        }
+
+        if (!ScopeServiceBridge.isConnected()) {
+            Toast.makeText(
+                    this,
+                    "配置已保存，LSPosed Scope Service 暂未连接",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+
+        if (pending.size() == 1) {
+            requestScopeBatch(
+                    new ArrayList<>(
+                            pending
+                    )
+            );
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(
+                        "批量作用域请求"
+                )
+                .setMessage(
+                        "已选择应用，其中 "
+                                + pending.size()
+                                + " 个尚未加入 S Tool 的 LSPosed 作用域。"
+                                + "是否一次提交给 LSPosed 发起原生作用域请求？"
+                )
+                .setPositiveButton(
+                        "开始请求",
+                        (dialog, which) ->
+                                requestScopeBatch(
+                                        new ArrayList<>(
+                                                pending
+                                        )
+                                )
+                )
+                .setNegativeButton(
+                        "稍后",
+                        null
+                )
+                .show();
+    }
+
+    private void requestScopeBatch(
+            List<String> packages
+    ) {
+        ScopeServiceBridge.requestScopes(
+                packages,
+                (requestedPackage,
+                 state,
+                 message) ->
+                        runOnUiThread(
+                                () -> {
+                                    if (isFinishing()
+                                            || isDestroyed()) {
+                                        return;
+                                    }
+
+                                    if (state
+                                            == ScopeServiceBridge
+                                            .RequestState.FAILED
+                                            && message != null) {
+                                        Toast.makeText(
+                                                this,
+                                                message,
+                                                Toast.LENGTH_SHORT
+                                        ).show();
+                                    }
+
+                                    refreshBridgeStatus();
+                                    refreshSelectedSummary();
+                                    rebuildAppList();
+                                }
+                        )
+        );
+    }
+
+    private void clearSelections() {
+        if (!crossProcessAvailable) {
+            return;
+        }
+
+        SharedPreferences.Editor editor =
+                preferences.edit();
+
+        for (String key
+                : preferences.getAll().keySet()) {
+            if (FeatureRegistry
+                    .isUniversalAppKey(
+                            capabilityId,
+                            key
+                    )) {
+                editor.remove(
+                        key
+                );
+            }
+        }
+
+        editor.putLong(
+                FeaturePrefs.KEY_LAST_CHANGED_AT,
+                System.currentTimeMillis()
+        );
+
+        if (!editor.commit()) {
+            Toast.makeText(
+                    this,
+                    "保存失败",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        refreshSelectedSummary();
+        rebuildAppList();
+    }
+
+    private boolean isSelected(
+            String packageName
+    ) {
+        String key =
+                FeatureRegistry.universalAppKey(
+                        capabilityId,
+                        packageName
+                );
+
+        return FeaturePrefs.isEnabled(
+                preferences,
+                key
+        );
     }
 
     private boolean setCapabilityEnabled(
@@ -867,25 +1476,70 @@ public final class AppSelectorActivity extends Activity {
         );
     }
 
+    private void refreshBridgeStatus() {
+        if (bridgeStatus == null) {
+            return;
+        }
+
+        String configText =
+                crossProcessAvailable
+                        ? "配置桥可用"
+                        : "配置桥不可用";
+
+        String scopeText =
+                ScopeServiceBridge.isConnected()
+                        ? "Scope Service 已连接"
+                        : "Scope Service 连接中";
+
+        bridgeStatus.setText(
+                configText
+                        + " · "
+                        + scopeText
+        );
+
+        bridgeStatus.setTextColor(
+                crossProcessAvailable
+                        && ScopeServiceBridge.isConnected()
+                        ? COLOR_OK
+                        : COLOR_WARN
+        );
+    }
+
     private void refreshSelectedSummary() {
         if (selectedSummary == null) {
             return;
         }
 
         int count = 0;
+        int inScopeCount = 0;
 
         for (Map.Entry<String, ?>
                 entry
                 : preferences.getAll()
                 .entrySet()) {
-            if (FeatureRegistry.isUniversalAppKey(
+            if (!FeatureRegistry.isUniversalAppKey(
                     capabilityId,
                     entry.getKey()
             )
-                    && Boolean.TRUE.equals(
+                    || !Boolean.TRUE.equals(
                     entry.getValue()
             )) {
-                count++;
+                continue;
+            }
+
+            count++;
+
+            String packageName =
+                    FeatureRegistry
+                            .packageFromUniversalAppKey(
+                                    capabilityId,
+                                    entry.getKey()
+                            );
+
+            if (ScopeServiceBridge.isInScope(
+                    packageName
+            )) {
+                inScopeCount++;
             }
         }
 
@@ -893,6 +1547,12 @@ public final class AppSelectorActivity extends Activity {
                 "已选择 "
                         + count
                         + " 个 App"
+                        + (ScopeServiceBridge.isConnected()
+                        ? " · Scope "
+                        + inScopeCount
+                        + "/"
+                        + count
+                        : " · Scope 状态连接中")
         );
     }
 
@@ -947,14 +1607,18 @@ public final class AppSelectorActivity extends Activity {
     private LinearLayout vertical() {
         LinearLayout layout =
                 new LinearLayout(this);
+
         layout.setOrientation(
                 LinearLayout.VERTICAL
         );
+
         return layout;
     }
 
     private LinearLayout card() {
-        LinearLayout card = vertical();
+        LinearLayout card =
+                vertical();
+
         card.setPadding(
                 dp(16),
                 dp(15),
@@ -964,6 +1628,7 @@ public final class AppSelectorActivity extends Activity {
 
         GradientDrawable background =
                 new GradientDrawable();
+
         background.setColor(
                 COLOR_CARD
         );
@@ -978,7 +1643,11 @@ public final class AppSelectorActivity extends Activity {
                         238
                 )
         );
-        card.setBackground(background);
+
+        card.setBackground(
+                background
+        );
+
         return card;
     }
 
@@ -990,6 +1659,7 @@ public final class AppSelectorActivity extends Activity {
     ) {
         TextView view =
                 new TextView(this);
+
         view.setText(value);
         view.setTextSize(sp);
         view.setTextColor(color);
@@ -997,6 +1667,7 @@ public final class AppSelectorActivity extends Activity {
                 Typeface.DEFAULT,
                 style
         );
+
         return view;
     }
 
@@ -1005,13 +1676,32 @@ public final class AppSelectorActivity extends Activity {
     ) {
         Button button =
                 new Button(this);
+
         button.setText(value);
         button.setTextSize(12);
         button.setAllCaps(false);
         button.setTextColor(
                 COLOR_ACCENT
         );
+
         return button;
+    }
+
+    private LinearLayout.LayoutParams weightedButtonParams(
+            float weight,
+            int leftMargin
+    ) {
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(
+                        0,
+                        dp(42),
+                        weight
+                );
+
+        params.leftMargin =
+                leftMargin;
+
+        return params;
     }
 
     private LinearLayout.LayoutParams wrapMatch() {
@@ -1026,8 +1716,10 @@ public final class AppSelectorActivity extends Activity {
     ) {
         LinearLayout.LayoutParams params =
                 wrapMatch();
+
         params.topMargin =
                 margin;
+
         return params;
     }
 

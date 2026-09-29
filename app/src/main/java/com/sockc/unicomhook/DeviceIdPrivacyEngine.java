@@ -4,9 +4,9 @@ import android.os.Build;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
 
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XC_MethodReplacement;
-import de.robv.android.xposed.XposedBridge;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XC_MethodReplacement;
+import com.sockc.unicomhook.compat.XposedBridge;
 
 final class DeviceIdPrivacyEngine {
 
