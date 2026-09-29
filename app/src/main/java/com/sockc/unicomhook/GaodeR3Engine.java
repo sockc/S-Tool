@@ -122,6 +122,8 @@ final class GaodeR3Engine {
     private static void installSemanticAdHooks(
             ClassLoader classLoader
     ) {
+        // 17.x semantic gate: let Gaode's own launch state machine
+        // take the NO_SPLASH path instead of swallowing launch callbacks.
         hookBooleanFalse(
                 classLoader,
                 "com.autonavi.bundle.amaphome.impl.BootBizDataPreloaderImpl",
@@ -129,33 +131,30 @@ final class GaodeR3Engine {
                 "splash_gate"
         );
 
-        hookSafeSuppress(
+        // Observe the real finish path. Do not alter it.
+        hookObserveAll(
                 classLoader,
-                "com.autonavi.minimap.impl.SplashScreenServiceImpl",
-                "fetchRealTime",
-                "splash_realtime"
+                "com.autonavi.minimap.g",
+                "e",
+                "splash_finish"
         );
 
-        hookBooleanFalse(
+        // 16.x compatibility: execute the original gate method first,
+        // then change only the returned finish-reason field to NO_SPLASH.
+        installLegacySplashGate(
                 classLoader,
-                "com.autonavi.minimap.impl.SplashScreenServiceImpl",
-                "isSplashShowing",
-                "splash_showing"
+                "u96"
+        );
+        installLegacySplashGate(
+                classLoader,
+                "za6"
         );
 
-        hookBooleanFalse(
-                classLoader,
-                "com.autonavi.minimap.impl.SplashScreenServiceImpl",
-                "isContinueLaunchMaskViewShowing",
-                "splash_mask_state"
-        );
-
-        hookSafeSuppress(
-                classLoader,
-                "com.autonavi.minimap.impl.SplashScreenServiceImpl",
-                "showSplashMaskView",
-                "splash_mask_show"
-        );
+        // IMPORTANT:
+        // Do NOT swallow SplashScreenServiceImpl.fetchRealTime(),
+        // showSplashMaskView(), isSplashShowing() or related launch-state
+        // methods here. Some Gaode builds wait on their callback/state chain;
+        // short-circuiting them can leave SplashActivity alive forever.
 
         hookSafeSuppress(
                 classLoader,
@@ -183,20 +182,6 @@ final class GaodeR3Engine {
                 "com.autonavi.minimap.bundle.msgbox.push.BackgroundMsgManager",
                 "a",
                 "background_message"
-        );
-
-        hookSafeSuppress(
-                classLoader,
-                "com.autonavi.minimap.splashscreen.ajx.NativesModuleSplashScreen",
-                "getLinkageMsg",
-                "splash_linkage"
-        );
-
-        hookSafeSuppress(
-                classLoader,
-                "com.autonavi.minimap.splashscreen.ajx.NativesModuleSplashScreen",
-                "getCurrentLinkageMsg",
-                "splash_current_linkage"
         );
 
         hookSafeSuppress(
@@ -231,6 +216,267 @@ final class GaodeR3Engine {
                 classLoader,
                 "com.autonavi.bundle.banner.view.DBanner",
                 "dbanner"
+        );
+    }
+
+    private static void installLegacySplashGate(
+            ClassLoader classLoader,
+            String className
+    ) {
+        Class<?> target =
+                XposedHelpers.findClassIfExists(
+                        className,
+                        classLoader
+                );
+
+        if (target == null) {
+            XposedBridge.log(
+                    TAG
+                            + "legacy gate class miss "
+                            + className
+            );
+            return;
+        }
+
+        Method method;
+
+        try {
+            method =
+                    target.getDeclaredMethod(
+                            "g",
+                            int.class,
+                            String.class
+                    );
+            method.setAccessible(
+                    true
+            );
+        } catch (Throwable throwable) {
+            XposedBridge.log(
+                    TAG
+                            + "legacy gate signature miss "
+                            + className
+                            + ".g(int,String)"
+            );
+            return;
+        }
+
+        String hookId =
+                "legacy_gate:"
+                        + className;
+
+        if (!installedIds.add(
+                hookId
+        )) {
+            return;
+        }
+
+        try {
+            XposedBridge.hookMethod(
+                    method,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(
+                                MethodHookParam param
+                        ) {
+                            Object result =
+                                    param.getResult();
+
+                            if (result == null) {
+                                return;
+                            }
+
+                            if (setIntField(
+                                    result,
+                                    "a",
+                                    1
+                            )) {
+                                logHit(
+                                        hookId
+                                                + ":NO_SPLASH"
+                                );
+                            } else {
+                                XposedBridge.log(
+                                        TAG
+                                                + "legacy gate returned "
+                                                + result.getClass()
+                                                .getName()
+                                                + " but field a was not writable"
+                                );
+                            }
+                        }
+                    }
+            );
+
+            XposedBridge.log(
+                    TAG
+                            + "HOOKED "
+                            + className
+                            + ".g(int,String)"
+            );
+        } catch (Throwable throwable) {
+            XposedBridge.log(
+                    TAG
+                            + "legacy gate hook failed "
+                            + className
+                            + " / "
+                            + throwable
+            );
+        }
+    }
+
+    private static boolean setIntField(
+            Object target,
+            String fieldName,
+            int value
+    ) {
+        for (Class<?> current =
+                target.getClass();
+                current != null
+                        && current != Object.class;
+                current =
+                        current.getSuperclass()) {
+            try {
+                Field field =
+                        current.getDeclaredField(
+                                fieldName
+                        );
+
+                if (field.getType()
+                        != int.class
+                        && field.getType()
+                        != Integer.class) {
+                    return false;
+                }
+
+                field.setAccessible(
+                        true
+                );
+
+                if (field.getType()
+                        == int.class) {
+                    field.setInt(
+                            target,
+                            value
+                    );
+                } else {
+                    field.set(
+                            target,
+                            Integer.valueOf(
+                                    value
+                            )
+                    );
+                }
+
+                return true;
+            } catch (NoSuchFieldException ignored) {
+            } catch (Throwable throwable) {
+                XposedBridge.log(
+                        TAG
+                                + "set field failed "
+                                + fieldName
+                                + " / "
+                                + throwable
+                );
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private static void hookObserveAll(
+            ClassLoader classLoader,
+            String className,
+            String methodName,
+            String id
+    ) {
+        Class<?> target =
+                XposedHelpers.findClassIfExists(
+                        className,
+                        classLoader
+                );
+
+        if (target == null) {
+            XposedBridge.log(
+                    TAG
+                            + "observe class miss "
+                            + className
+            );
+            return;
+        }
+
+        int count = 0;
+
+        for (Class<?> current = target;
+                current != null
+                        && current != Object.class;
+                current =
+                        current.getSuperclass()) {
+            for (Method method
+                    : current.getDeclaredMethods()) {
+                if (!methodName.equals(
+                        method.getName()
+                )
+                        || Modifier.isAbstract(
+                        method.getModifiers()
+                )) {
+                    continue;
+                }
+
+                String hookId =
+                        "observe:"
+                                + id
+                                + ":"
+                                + current.getName()
+                                + "#"
+                                + methodName
+                                + "/"
+                                + method.getParameterTypes()
+                                .length;
+
+                if (!installedIds.add(
+                        hookId
+                )) {
+                    continue;
+                }
+
+                try {
+                    method.setAccessible(
+                            true
+                    );
+
+                    XposedBridge.hookMethod(
+                            method,
+                            new XC_MethodHook() {
+                                @Override
+                                protected void afterHookedMethod(
+                                        MethodHookParam param
+                                ) {
+                                    logHit(
+                                            id
+                                    );
+                                }
+                            }
+                    );
+                    count++;
+                } catch (Throwable throwable) {
+                    XposedBridge.log(
+                            TAG
+                                    + "observe hook failed "
+                                    + hookId
+                                    + " / "
+                                    + throwable
+                    );
+                }
+            }
+        }
+
+        XposedBridge.log(
+                TAG
+                        + "OBSERVE "
+                        + id
+                        + " hooks="
+                        + count
         );
     }
 
