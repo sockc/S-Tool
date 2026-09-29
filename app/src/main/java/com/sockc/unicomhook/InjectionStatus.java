@@ -35,6 +35,21 @@ final class InjectionStatus {
                 .apply();
     }
 
+    static void clearAll(
+            Context context
+    ) {
+        if (context == null) {
+            return;
+        }
+
+        context.getSharedPreferences(
+                PREF_FILE,
+                Context.MODE_PRIVATE
+        ).edit()
+                .clear()
+                .apply();
+    }
+
     static long getLastInjectedAt(
             Context context,
             String packageName
