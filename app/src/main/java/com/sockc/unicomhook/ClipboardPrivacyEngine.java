@@ -2,8 +2,8 @@ package com.sockc.unicomhook;
 
 import android.content.ClipboardManager;
 
-import de.robv.android.xposed.XC_MethodReplacement;
-import de.robv.android.xposed.XposedBridge;
+import com.sockc.unicomhook.compat.XC_MethodReplacement;
+import com.sockc.unicomhook.compat.XposedBridge;
 
 final class ClipboardPrivacyEngine {
 
