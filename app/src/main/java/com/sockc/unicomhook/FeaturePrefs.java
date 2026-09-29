@@ -137,7 +137,7 @@ public final class FeaturePrefs {
         editor.commit();
     }
 
-    private static void migrateIndependentUniversalCapabilities(
+    static void migrateIndependentUniversalCapabilities(
             SharedPreferences preferences
     ) {
         if (preferences.getBoolean(
