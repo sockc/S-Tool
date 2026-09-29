@@ -297,7 +297,7 @@ public final class AppSelectorActivity
         TextView footer = text(
                 "选择 App 后，S Tool 会检查 LSPosed 的真实 Scope；"
                         + "未加入时会直接发起 LSPosed 原生“作用域请求”，无需进入管理器手动勾选。"
-                        + "取消保护只会取消本功能配置，不会擅自移除 LSPosed Scope。",
+                        + "取消当前功能只会取消该 App 的本项配置，不会擅自移除 LSPosed Scope。",
                 12,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -968,6 +968,54 @@ public final class AppSelectorActivity
                 topMargin(dp(3))
         );
 
+        if (FeatureRegistry.UNIVERSAL_SPLASH_SKIP.equals(
+                capabilityId
+        )) {
+            SplashSkipStatus.Entry entry =
+                    SplashSkipStatus.read(
+                            this,
+                            item.packageName
+                    );
+
+            String statusText;
+
+            if (entry.lastSuccessAt > 0L) {
+                statusText =
+                        "今日成功 "
+                                + entry.todayCount
+                                + " 次 · 最近 "
+                                + DateFormat
+                                .getTimeInstance(
+                                        DateFormat.SHORT
+                                )
+                                .format(
+                                        new Date(
+                                                entry.lastSuccessAt
+                                        )
+                                )
+                                + " · 评分 "
+                                + entry.lastScore;
+            } else {
+                statusText =
+                        "尚未记录到成功跳过";
+            }
+
+            TextView splashStatus =
+                    text(
+                            statusText,
+                            11,
+                            entry.lastSuccessAt > 0L
+                                    ? COLOR_OK
+                                    : COLOR_SUBTEXT,
+                            Typeface.NORMAL
+                    );
+
+            copy.addView(
+                    splashStatus,
+                    topMargin(dp(3))
+            );
+        }
+
         row.addView(
                 copy,
                 new LinearLayout.LayoutParams(
@@ -1597,6 +1645,14 @@ public final class AppSelectorActivity
                 capabilityId
         )) {
             return "限制所选 App 批量枚举已安装应用和软件包。仅处理批量枚举 API，降低对正常打开其它 App 的影响。";
+        }
+
+        if (FeatureRegistry.UNIVERSAL_SPLASH_SKIP.equals(
+                capabilityId
+        )) {
+            return "严格模式：只在目标 App 冷启动后的前 10 秒扫描可见 UI；"
+                    + "综合“跳过/关闭广告”文字、resource-id、广告上下文和屏幕位置评分，达到阈值后最多执行一次 performClick()。"
+                    + "不 Hook 广告 SDK、不修改启动回调或状态机。";
         }
 
         return FeatureRegistry.universalCapabilitySummary(
