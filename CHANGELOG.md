@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.2
+
+### Critical fix
+- Fix `AirvoyHook.<clinit>` crash caused by constructing a `Handler` during LSPosed/Zygote class initialization before a thread Looper existed.
+- Create the Airvoy main-thread Handler only when a real Activity exists.
+- Change `SMainHook` from eager Hook object construction to lazy per-Hook class instantiation.
+- Isolate Hook class initialization and execution failures so one broken Hook can no longer prevent the S Tool entry class from loading.
+- Preserve V1.3.1 Application.attach dispatch and real injection diagnostics.
+
+### Version
+- Bump app version to `1.3.2` / versionCode `132`.
+
 ## 1.3.1
 
 ### Injection entry fix

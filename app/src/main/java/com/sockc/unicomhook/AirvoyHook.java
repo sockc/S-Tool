@@ -6,7 +6,6 @@ import android.content.Context;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -35,9 +34,6 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
 
     private static final String TARGET_PACKAGE = "com.airvoy.airvoy";
     private static final String TAG = "Sockc_Airvoy: ";
-
-    private static final Handler MAIN_HANDLER =
-            new Handler(Looper.getMainLooper());
 
     private static volatile WeakReference<Activity> currentActivity =
             new WeakReference<>(null);
@@ -267,6 +263,10 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
      */
     private static void scheduleCloseAttempts(Activity activity) {
         final long sessionId = CLOSE_SESSION_ID.incrementAndGet();
+        final Handler mainHandler =
+                new Handler(
+                        activity.getMainLooper()
+                );
 
         long[] delays = {
                 250L,
@@ -283,7 +283,7 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
         for (int i = 0; i < delays.length; i++) {
             final int attempt = i;
 
-            MAIN_HANDLER.postDelayed(
+            mainHandler.postDelayed(
                     () -> {
                         if (sessionId != CLOSE_SESSION_ID.get()) {
                             return;

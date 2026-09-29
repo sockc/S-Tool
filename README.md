@@ -2,9 +2,9 @@
 
 S Tool 是一个基于 Xposed / LSPosed 的 Android 功能增强与隐私工具集合。
 
-## V1.3.1 注入入口修复与诊断
+## V1.3.2 Hook 初始化崩溃修复
 
-V1.3.1 修复目标 App 进程中过早读取配置的入口设计，并加入真实 LSPosed 注入状态回报。V1.3 的通用隐私引擎继续保留。
+V1.3.2 修复 AirvoyHook 在 LSPosed/Zygote 类加载阶段创建 Handler 导致整个 SMainHook 初始化失败的问题。所有 Hook 现在延迟实例化，并在单个模块初始化失败时隔离异常，避免一个 Hook 拖死整个 S Tool。V1.3.1 的目标 Context 配置读取与真实注入诊断继续保留。
 
 ### 通用定位保护
 
@@ -78,4 +78,4 @@ GitHub Debug/Release 稳定签名使用以下 Repository Secrets：
 
 ## 版本
 
-当前开发版本：V1.3.1
+当前开发版本：V1.3.2
