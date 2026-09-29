@@ -127,7 +127,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.2.1 · 模块与子功能管理",
+                "V1.2.2 · 稳定配置桥与固定签名",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -170,9 +170,10 @@ public final class MainActivity extends Activity {
         }
 
         TextView footer = text(
-                "总开关关闭时会停止整个模块，子功能的原设置会保留。"
-                        + " 修改开关后，请强制停止并重新打开对应目标 App。"
-                        + " Hook 读取不到配置时仍默认开启，避免升级后功能意外失效。",
+                "总开关关闭时会停止整个模块，子功能原设置会保留。"
+                        + " 配置通过只读 ConfigProvider 跨进程读取；"
+                        + " 修改开关后请强制停止并重新打开对应目标 App。"
+                        + " 配置桥读取失败时 Hook 默认开启，避免升级后功能意外失效。",
                 12,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -252,8 +253,8 @@ public final class MainActivity extends Activity {
 
         if (!crossProcessAvailable) {
             TextView warning = text(
-                    "当前只能写入本机私有配置。请先在 LSPosed 中启用 S Tool，"
-                            + "然后重新打开 S Tool，开关才会真正作用于目标 App。",
+                    "配置桥自检失败。请确认 S Tool 已正常安装后重新打开；"
+                            + "目标 App 内仍会回退到旧 XSharedPreferences 或默认开启。",
                     13,
                     COLOR_WARN,
                     Typeface.BOLD
@@ -895,8 +896,8 @@ public final class MainActivity extends Activity {
 
         configStatus.setText(
                 crossProcessAvailable
-                        ? "跨进程配置：可用"
-                        : "跨进程配置：不可用"
+                        ? "跨进程配置桥：可用"
+                        : "跨进程配置桥：不可用"
         );
 
         configStatus.setTextColor(
