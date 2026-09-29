@@ -32,17 +32,39 @@ public class FirstyHook implements IXposedHookLoadPackage {
                 final Activity activity = (Activity) param.thisObject;
                 final View decorView = activity.getWindow().getDecorView();
 
-                decorView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+                final ViewTreeObserver.OnGlobalLayoutListener[] holder =
+                        new ViewTreeObserver.OnGlobalLayoutListener[1];
+
+                holder[0] = new ViewTreeObserver.OnGlobalLayoutListener() {
                     @Override
                     public void onGlobalLayout() {
-                        // 尝试执行深度扫描并点击
                         if (deepScanAndClick(decorView)) {
                             XposedBridge.log(TAG + "成功捕获并点击关闭按钮！");
+                            removeListener(decorView, holder[0]);
                         }
                     }
-                });
+                };
+
+                decorView.getViewTreeObserver().addOnGlobalLayoutListener(holder[0]);
+                decorView.postDelayed(
+                        () -> removeListener(decorView, holder[0]),
+                        5000L
+                );
             }
         });
+    }
+
+    private void removeListener(
+            View decorView,
+            ViewTreeObserver.OnGlobalLayoutListener listener
+    ) {
+        try {
+            ViewTreeObserver observer = decorView.getViewTreeObserver();
+            if (observer.isAlive() && listener != null) {
+                observer.removeOnGlobalLayoutListener(listener);
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private boolean deepScanAndClick(View view) {
