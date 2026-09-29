@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace 'com.sockc.unicomhook'
-    compileSdk 34
+    compileSdk 36
 
     def signingKeystorePath = System.getenv("SIGNING_KEYSTORE_PATH")
     def signingStorePassword = System.getenv("KEYSTORE_PASSWORD")
