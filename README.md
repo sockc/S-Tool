@@ -2,6 +2,35 @@
 
 S Tool 是一个基于 LSPosed / libxposed 的 Android 功能增强与隐私工具集合。
 
+## V1.4.3 高德 R3
+
+V1.4.3 重写高德处理链路，不再把 View 文本扫描当主方案。
+
+### 三层高德架构
+
+1. **业务语义断源**
+   - `BootBizDataPreloaderImpl.canShowSplash()` 强制返回 false，走高德自己的无开屏广告分支。
+   - 屏蔽 `SplashScreenServiceImpl` 的实时开屏拉取、遮罩显示与展示状态。
+   - 屏蔽高德 Banner 管理/解析、后台运营消息、开屏联动数据和搜索页模板广告入口。
+   - 对 `DBanner` 保留视图层兜底。
+
+2. **AJX 列表绑定层**
+   - 监听高德 AJX 文本控件的真实 setText / setAttribute。
+   - 命中“探索本地”“扫街榜”“订周末”等目标后，向上定位真实 AJX 列表 item。
+   - 自动挂载该列表 adapter 的 `onBindViewHolder`，以后每个 item 绑定完成即判断并隐藏。
+   - 避免依赖全页持续扫描。
+
+3. **底部导航结构识别**
+   - 识别靠近屏幕底部、包含多个已知 tab 的真实导航行。
+   - 隐藏“探索 / AI对话 / 路线”后重新分配剩余 tab 宽度。
+   - 不再仅依赖单个 TextView 的父级猜测。
+
+旧版 R2 的 View 指纹和文字扫描继续保留作为 fallback，避免高德版本漂移后完全失效。
+
+### 设计参考
+
+Gaode R3 的架构参考了开源项目 **ldxm666/MapAdKiller** 对高德 16.23 / 17.00 的公开逆向分析与验证结论。S Tool 未直接复制其 GPL-3.0-or-later 源码，而是基于公开的类/方法事实和处理思路重新实现，以保持 S Tool 自身代码结构独立。
+
 ## V1.4.2 验证码 V2 · 高德 R2 · 游戏助手 R2
 
 V1.4.2 继续收紧 V1.4.1 modern libxposed 迁移后的稳定性，并重点修复三个已经确认的实际问题。
