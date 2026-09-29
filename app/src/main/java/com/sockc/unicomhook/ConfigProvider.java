@@ -25,7 +25,7 @@ public final class ConfigProvider extends ContentProvider {
     public static final String KEY_PROVIDER_READY =
             "_provider_ready";
 
-    public static final int PROTOCOL_VERSION = 1;
+    public static final int PROTOCOL_VERSION = 2;
 
     @Override
     public boolean onCreate() {
@@ -88,6 +88,10 @@ public final class ConfigProvider extends ContentProvider {
 
         for (String key
                 : FeatureRegistry.allPreferenceKeys()) {
+            boolean defaultValue =
+                    FeatureRegistry.defaultEnabled(
+                            key
+                    );
             boolean value;
 
             if ("unicom.screenshot_privacy".equals(key)
@@ -97,12 +101,12 @@ public final class ConfigProvider extends ContentProvider {
             )) {
                 value = preferences.getBoolean(
                         "screenshot_privacy",
-                        true
+                        defaultValue
                 );
             } else {
                 value = preferences.getBoolean(
                         key,
-                        true
+                        defaultValue
                 );
             }
 
