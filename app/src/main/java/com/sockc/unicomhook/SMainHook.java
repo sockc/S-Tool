@@ -32,6 +32,10 @@ public final class SMainHook implements IXposedHookLoadPackage {
     }
 
     private final HookEntry[] entries = new HookEntry[] {
+            new HookEntry(
+                    "universal_privacy",
+                    new UniversalPrivacyHook()
+            ),
             new HookEntry("unicom", new UnicomHook()),
             new HookEntry(
                     "unicom",
@@ -64,9 +68,12 @@ public final class SMainHook implements IXposedHookLoadPackage {
         HookConfig config = HookConfig.load();
 
         for (HookEntry entry : entries) {
-            boolean enabled = entry.requiredSubFeatureId == null
-                    ? config.isEnabled(entry.featureId)
-                    : config.isEnabled(
+            boolean enabled =
+                    entry.requiredSubFeatureId == null
+                            ? config.isEnabled(
+                            entry.featureId
+                    )
+                            : config.isEnabled(
                             entry.featureId,
                             entry.requiredSubFeatureId
                     );
@@ -76,7 +83,9 @@ public final class SMainHook implements IXposedHookLoadPackage {
             }
 
             try {
-                entry.delegate.handleLoadPackage(lpparam);
+                entry.delegate.handleLoadPackage(
+                        lpparam
+                );
             } catch (Throwable throwable) {
                 XposedBridge.log(
                         TAG
