@@ -16,9 +16,9 @@ public final class FeatureRegistry {
     public static final String UNIVERSAL_SCREENSHOT =
             "universal_privacy.screenshot";
 
-    private static final String LOCATION_APP_PREFIX =
+    public static final String LOCATION_APP_PREFIX =
             "universal_privacy.location.app.";
-    private static final String SCREENSHOT_APP_PREFIX =
+    public static final String SCREENSHOT_APP_PREFIX =
             "universal_privacy.screenshot.app.";
 
     public static final class SubFeature {
@@ -483,14 +483,64 @@ public final class FeatureRegistry {
             String capabilityId,
             String packageName
     ) {
-        String prefix =
-                UNIVERSAL_SCREENSHOT.equals(
+        return universalAppPrefix(
+                capabilityId
+        ) + packageName;
+    }
+
+    public static String universalAppPrefix(
+            String capabilityId
+    ) {
+        if (UNIVERSAL_SCREENSHOT.equals(
+                capabilityId
+        )) {
+            return SCREENSHOT_APP_PREFIX;
+        }
+
+        return LOCATION_APP_PREFIX;
+    }
+
+    public static boolean isUniversalAppKey(
+            String key
+    ) {
+        return key != null
+                && (key.startsWith(
+                LOCATION_APP_PREFIX
+        )
+                || key.startsWith(
+                SCREENSHOT_APP_PREFIX
+        ));
+    }
+
+    public static boolean isUniversalAppKey(
+            String capabilityId,
+            String key
+    ) {
+        return key != null
+                && key.startsWith(
+                universalAppPrefix(
                         capabilityId
                 )
-                        ? SCREENSHOT_APP_PREFIX
-                        : LOCATION_APP_PREFIX;
+        );
+    }
 
-        return prefix + packageName;
+    public static String packageFromUniversalAppKey(
+            String capabilityId,
+            String key
+    ) {
+        String prefix =
+                universalAppPrefix(
+                        capabilityId
+                );
+
+        if (key == null
+                || !key.startsWith(prefix)) {
+            return null;
+        }
+
+        return key.substring(
+                prefix.length()
+        );
     }
 
     public static List<String> allPreferenceKeys() {
@@ -504,21 +554,6 @@ public final class FeatureRegistry {
                     : feature.subFeatures) {
                 keys.add(subFeature.id);
             }
-        }
-
-        for (TargetApp app : targetApps()) {
-            keys.add(
-                    universalAppKey(
-                            UNIVERSAL_LOCATION,
-                            app.packageName
-                    )
-            );
-            keys.add(
-                    universalAppKey(
-                            UNIVERSAL_SCREENSHOT,
-                            app.packageName
-                    )
-            );
         }
 
         return keys;
