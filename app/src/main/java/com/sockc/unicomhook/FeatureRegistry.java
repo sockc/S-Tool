@@ -427,7 +427,9 @@ public final class FeatureRegistry {
                             "oplus_game",
                             "OPPO 游戏助手",
                             "游戏自动化能力与配置兼容处理",
-                            "com.oplus.games"
+                            "com.oplus.games",
+                            "com.coloros.gamespaceui",
+                            "com.coloros.gamespace"
                     ),
                     feature(
                             "airvoy",
