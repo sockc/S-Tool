@@ -25,6 +25,8 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 public class UnicomHook implements IXposedHookLoadPackage {
     private static final String TAG = "SockcHook: ";
     private static final String TARGET_PACKAGE = "com.sinovatech.unicom.ui";
+    private static final int TAG_WARM_SPLASH_LISTENER = 0x7F0B7101;
+    private static final long WARM_SPLASH_SCAN_TIMEOUT_MS = 5000L;
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
@@ -91,26 +93,55 @@ public class UnicomHook implements IXposedHookLoadPackage {
         try {
             XposedHelpers.findAndHookMethod(Activity.class, "onResume", new XC_MethodHook() {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                protected void afterHookedMethod(MethodHookParam param) {
                     Activity activity = (Activity) param.thisObject;
                     Window window = activity.getWindow();
                     if (window == null) return;
 
                     final View decorView = window.getDecorView();
+                    if (Boolean.TRUE.equals(decorView.getTag(TAG_WARM_SPLASH_LISTENER))) {
+                        return;
+                    }
 
-                    decorView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+                    final ViewTreeObserver.OnGlobalLayoutListener[] holder =
+                            new ViewTreeObserver.OnGlobalLayoutListener[1];
+
+                    holder[0] = new ViewTreeObserver.OnGlobalLayoutListener() {
                         @Override
                         public void onGlobalLayout() {
                             if (scanAndClickSkip(decorView)) {
-                                XposedBridge.log(TAG + "抓获热启动广告【跳过】按钮，已底层光速点击！");
-                                decorView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                                XposedBridge.log(TAG + "抓获热启动广告【跳过】按钮");
+                                removeWarmSplashListener(decorView, holder[0]);
                             }
                         }
-                    });
+                    };
+
+                    decorView.setTag(TAG_WARM_SPLASH_LISTENER, Boolean.TRUE);
+                    decorView.getViewTreeObserver().addOnGlobalLayoutListener(holder[0]);
+
+                    decorView.postDelayed(
+                            () -> removeWarmSplashListener(decorView, holder[0]),
+                            WARM_SPLASH_SCAN_TIMEOUT_MS
+                    );
                 }
             });
         } catch (Throwable t) {
             XposedBridge.log(TAG + "热启动 Hook 失败: " + t.getMessage());
+        }
+    }
+
+    private void removeWarmSplashListener(
+            View decorView,
+            ViewTreeObserver.OnGlobalLayoutListener listener
+    ) {
+        try {
+            ViewTreeObserver observer = decorView.getViewTreeObserver();
+            if (observer.isAlive() && listener != null) {
+                observer.removeOnGlobalLayoutListener(listener);
+            }
+        } catch (Throwable ignored) {
+        } finally {
+            decorView.setTag(TAG_WARM_SPLASH_LISTENER, null);
         }
     }
 
