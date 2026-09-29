@@ -3,17 +3,16 @@ package com.sockc.unicomhook;
 import android.app.Application;
 import android.content.Context;
 
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XposedBridge;
+import com.sockc.unicomhook.compat.XposedHelpers;
+
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
-
-public final class SMainHook implements IXposedHookLoadPackage {
+public final class SMainHook
+        implements HookModule {
 
     private static final String TAG =
             "S-Tool/Main: ";
@@ -135,7 +134,7 @@ public final class SMainHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(
-            XC_LoadPackage.LoadPackageParam lpparam
+            LoadPackageParam lpparam
     ) {
         XposedBridge.log(
                 TAG
@@ -218,7 +217,7 @@ public final class SMainHook implements IXposedHookLoadPackage {
         } catch (Throwable throwable) {
             XposedBridge.log(
                     TAG
-                            + "Application.attach Hook 失败，立即使用默认配置分发: "
+                            + "Application.attach Hook 失败，使用默认配置分发: "
                             + throwable
             );
 
@@ -231,7 +230,7 @@ public final class SMainHook implements IXposedHookLoadPackage {
     }
 
     private void dispatchHooks(
-            XC_LoadPackage.LoadPackageParam lpparam,
+            LoadPackageParam lpparam,
             HookConfig config,
             Context context
     ) {
@@ -274,17 +273,18 @@ public final class SMainHook implements IXposedHookLoadPackage {
                         );
 
                 Object hook =
-                        hookClass.newInstance();
+                        hookClass.getDeclaredConstructor()
+                                .newInstance();
 
                 if (!(hook
-                        instanceof IXposedHookLoadPackage)) {
+                        instanceof HookModule)) {
                     throw new IllegalStateException(
                             entry.delegateClassName
-                                    + " 未实现 IXposedHookLoadPackage"
+                                    + " 未实现 HookModule"
                     );
                 }
 
-                ((IXposedHookLoadPackage) hook)
+                ((HookModule) hook)
                         .handleLoadPackage(
                                 lpparam
                         );
