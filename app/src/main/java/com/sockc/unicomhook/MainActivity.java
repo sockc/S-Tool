@@ -52,12 +52,16 @@ public final class MainActivity extends Activity {
     private TextView configStatus;
     private TextView enabledSummary;
     private TextView installedSummary;
+    private TextView injectionSummary;
     private TextView changedSummary;
 
     private final Map<String, Switch> switches =
             new LinkedHashMap<>();
 
     private final Map<String, TextView> subSummaryViews =
+            new LinkedHashMap<>();
+
+    private final Map<String, TextView> targetStatusViews =
             new LinkedHashMap<>();
 
     private final Map<String, LinearLayout> subContainers =
@@ -91,6 +95,15 @@ public final class MainActivity extends Activity {
 
         setContentView(buildContent());
         refreshSummary();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (configStatus != null) {
+            refreshSummary();
+        }
     }
 
     private View buildContent() {
@@ -127,7 +140,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.3.0 · 通用隐私引擎",
+                "V1.3.1 · 注入入口修复与诊断",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -264,6 +277,17 @@ public final class MainActivity extends Activity {
                 topMargin(dp(8))
         );
 
+        injectionSummary = text(
+                "",
+                14,
+                COLOR_SUBTEXT,
+                Typeface.NORMAL
+        );
+        card.addView(
+                injectionSummary,
+                topMargin(dp(8))
+        );
+
         changedSummary = text(
                 "",
                 13,
@@ -397,6 +421,11 @@ public final class MainActivity extends Activity {
         nameColumn.addView(
                 target,
                 topMargin(dp(3))
+        );
+
+        targetStatusViews.put(
+                feature.id,
+                target
         );
 
         firstRow.addView(
@@ -813,6 +842,33 @@ public final class MainActivity extends Activity {
             builder.append(
                     "已安装 "
             ).append(version);
+
+            long injectedAt =
+                    InjectionStatus
+                            .getLastInjectedAt(
+                                    this,
+                                    packageName
+                            );
+
+            if (injectedAt > 0L) {
+                builder.append(
+                        " · 已注入 "
+                ).append(
+                        DateFormat
+                                .getTimeInstance(
+                                        DateFormat.SHORT
+                                )
+                                .format(
+                                        new Date(
+                                                injectedAt
+                                        )
+                                )
+                );
+            } else {
+                builder.append(
+                        " · 未检测到注入"
+                );
+            }
         }
 
         if (installed == 0) {
@@ -960,6 +1016,69 @@ public final class MainActivity extends Activity {
                         targets.size()
                 )
         );
+
+        int injectedTargets = 0;
+        long latestInjection = 0L;
+
+        for (String packageName : targets) {
+            long injectedAt =
+                    InjectionStatus
+                            .getLastInjectedAt(
+                                    this,
+                                    packageName
+                            );
+
+            if (injectedAt > 0L) {
+                injectedTargets++;
+                latestInjection =
+                        Math.max(
+                                latestInjection,
+                                injectedAt
+                        );
+            }
+        }
+
+        injectionSummary.setText(
+                latestInjection <= 0L
+                        ? "真实注入：尚未检测到目标 App 注入"
+                        : String.format(
+                        Locale.getDefault(),
+                        "真实注入：%d / %d · 最近 %s",
+                        injectedTargets,
+                        targets.size(),
+                        DateFormat
+                                .getTimeInstance(
+                                        DateFormat.SHORT
+                                )
+                                .format(
+                                        new Date(
+                                                latestInjection
+                                        )
+                                )
+                )
+        );
+
+        injectionSummary.setTextColor(
+                latestInjection > 0L
+                        ? COLOR_OK
+                        : COLOR_WARN
+        );
+
+        for (FeatureRegistry.Feature feature
+                : FeatureRegistry.all()) {
+            TextView targetView =
+                    targetStatusViews.get(
+                            feature.id
+                    );
+
+            if (targetView != null) {
+                targetView.setText(
+                        buildTargetStatus(
+                                feature
+                        )
+                );
+            }
+        }
 
         long changedAt =
                 preferences.getLong(
