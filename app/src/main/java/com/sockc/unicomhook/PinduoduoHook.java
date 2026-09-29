@@ -33,11 +33,18 @@ public class PinduoduoHook implements IXposedHookLoadPackage {
 
         HookConfig config = HookConfig.load();
 
+        boolean universalFilePrivacy =
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_FILE_MEDIA,
+                        TARGET_PACKAGE
+                );
+
         boolean filePrivacy =
                 config.isEnabled(
                         "pinduoduo",
                         "pinduoduo.file_privacy"
-                );
+                )
+                        && !universalFilePrivacy;
         boolean permissionPrivacy =
                 config.isEnabled(
                         "pinduoduo",
