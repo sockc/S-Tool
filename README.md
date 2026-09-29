@@ -2,9 +2,9 @@
 
 S Tool 是一个基于 Xposed / LSPosed 的 Android 功能增强与隐私工具集合。
 
-## V1.2.1 管理面板
+## V1.2.2 配置与签名稳定性
 
-V1.2.1 在管理面板基础上加入分层子功能控制：
+V1.2.2 解决跨进程配置和 APK 签名稳定性问题，同时保留 V1.2.1 的分层子功能控制：
 
 - 查看跨进程配置是否可用
 - 查看已启用 Hook 数量
@@ -16,13 +16,13 @@ V1.2.1 在管理面板基础上加入分层子功能控制：
 - 修改时间诊断
 - 关闭某项后，重启对应目标 App 即生效
 
-功能开关使用 LSPosed 的 XSharedPreferences 机制。项目的 `xposedminversion` 为 93，并显式声明 `xposedsharedprefs`。如果管理页显示“跨进程配置不可用”，请先在 LSPosed 中启用 S Tool，再重新打开 S Tool。
+功能开关现在以只读 `ConfigProvider` 作为主跨进程通道。模块 UI 只把设置写在自己的私有 SharedPreferences 中；目标 App 里的 Hook 通过 Binder 读取配置，不再依赖 `MODE_WORLD_READABLE`。legacy `XSharedPreferences` 仅作为旧环境兼容兜底。
 
-为避免配置文件暂时不可读导致现有功能突然失效，Hook 读取不到配置时默认保持开启。
+为避免配置桥临时不可用导致现有功能突然失效，Hook 读取不到任何配置通道时默认保持开启。
 
 ## 架构
 
-V1.1 起使用单一 Xposed 入口 `SMainHook`。V1.2 加入 `HookConfig` 管理模块总开关；V1.2.1 进一步支持父子级配置，目标 Hook 只注册已开启的具体子功能，各模块仍保持相互隔离。
+V1.1 起使用单一 Xposed 入口 `SMainHook`。V1.2 加入 `HookConfig`；V1.2.1 支持父子级配置；V1.2.2 将配置主通道迁移到 `ConfigProvider`，避免新 Android/LSPosed 环境下 legacy New XSharedPreferences 失效。
 
 ## 构建
 
@@ -42,14 +42,14 @@ gradle clean assembleDebug
 
 仓库不保存任何签名文件或密码。
 
-GitHub Release 需要在仓库 Secrets 中配置：
+GitHub Debug/Release 稳定签名需要在仓库 Secrets 中配置：
 
 - `SIGNING_KEY_BASE64`
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS`
 - `KEY_PASSWORD`
 
-创建 `v*` Tag 后，GitHub Actions 会构建签名 Release APK、生成 SHA256，并创建 GitHub Release。
+配置 Secrets 后，GitHub Actions 的 Debug APK 与 Release APK 都使用同一把固定密钥。创建 `v*` Tag 后还会生成 SHA256 并创建 GitHub Release。首次切换到这把新密钥时，旧 APK 若签名不同，需要卸载一次；之后可直接覆盖更新。
 
 ## 安全说明
 
@@ -59,4 +59,4 @@ GitHub Release 需要在仓库 Secrets 中配置：
 
 ## 版本
 
-当前开发版本：V1.2.1
+当前开发版本：V1.2.2
