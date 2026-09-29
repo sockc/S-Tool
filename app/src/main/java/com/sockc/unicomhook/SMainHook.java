@@ -10,19 +10,34 @@ public final class SMainHook implements IXposedHookLoadPackage {
 
     private static final class HookEntry {
         final String featureId;
+        final String requiredSubFeatureId;
         final IXposedHookLoadPackage delegate;
 
         HookEntry(
                 String featureId,
                 IXposedHookLoadPackage delegate
         ) {
+            this(featureId, null, delegate);
+        }
+
+        HookEntry(
+                String featureId,
+                String requiredSubFeatureId,
+                IXposedHookLoadPackage delegate
+        ) {
             this.featureId = featureId;
+            this.requiredSubFeatureId = requiredSubFeatureId;
             this.delegate = delegate;
         }
     }
 
     private final HookEntry[] entries = new HookEntry[] {
             new HookEntry("unicom", new UnicomHook()),
+            new HookEntry(
+                    "unicom",
+                    "unicom.screenshot_privacy",
+                    new ScreenshotPrivacyHook()
+            ),
             new HookEntry("gaode", new GaodeHook()),
             new HookEntry("taobao", new TaobaoHook()),
             new HookEntry("tiktok", new TiktokHook()),
@@ -31,10 +46,6 @@ public final class SMainHook implements IXposedHookLoadPackage {
             new HookEntry("guazi", new GuaziHook()),
             new HookEntry("che300", new Che300Hook()),
             new HookEntry("firsty", new FirstyHook()),
-            new HookEntry(
-                    "screenshot_privacy",
-                    new ScreenshotPrivacyHook()
-            ),
             new HookEntry("meituan", new MeituanHook()),
             new HookEntry("pinduoduo", new PinduoduoHook()),
             new HookEntry("clipboard", new ClipboardHook()),
@@ -53,7 +64,14 @@ public final class SMainHook implements IXposedHookLoadPackage {
         HookConfig config = HookConfig.load();
 
         for (HookEntry entry : entries) {
-            if (!config.isEnabled(entry.featureId)) {
+            boolean enabled = entry.requiredSubFeatureId == null
+                    ? config.isEnabled(entry.featureId)
+                    : config.isEnabled(
+                            entry.featureId,
+                            entry.requiredSubFeatureId
+                    );
+
+            if (!enabled) {
                 continue;
             }
 
