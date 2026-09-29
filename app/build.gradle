@@ -6,13 +6,20 @@ android {
     namespace 'com.sockc.unicomhook'
     compileSdk 34
 
-    // 引入刚刚上传的签名文件
+    def signingKeystorePath = System.getenv("SIGNING_KEYSTORE_PATH")
+    def signingStorePassword = System.getenv("KEYSTORE_PASSWORD")
+    def signingKeyAlias = System.getenv("KEY_ALIAS")
+    def signingKeyPassword = System.getenv("KEY_PASSWORD")
+    def hasReleaseSigning = signingKeystorePath && signingStorePassword && signingKeyAlias && signingKeyPassword
+
     signingConfigs {
-        myConfig {
-            storeFile file("module.jks") 
-            storePassword "123456"
-            keyAlias "module"
-            keyPassword "123456"
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(signingKeystorePath)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+            }
         }
     }
 
@@ -20,17 +27,16 @@ android {
         applicationId "com.sockc.unicomhook"
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 110
+        versionName "1.1.0"
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.myConfig
-        }
-        debug {
-            signingConfig signingConfigs.myConfig
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

@@ -29,6 +29,8 @@ public class SmsCodeAutoCopy {
     private static final String TAG = "Sockc_SmsCode: ";
     private static final Uri SMS_URI = Uri.parse("content://sms");
     private static final Uri SMS_INBOX_URI = Uri.parse("content://sms/inbox");
+    private static final boolean MARK_SMS_AS_READ = false;
+    private static final boolean ALLOW_LOOSE_NUMERIC_MATCH = false;
 
     private static boolean sStarted = false;
     private static Context sAppContext;
@@ -98,8 +100,7 @@ public class SmsCodeAutoCopy {
                             }
                         }
 
-                        XposedBridge.log(TAG + "广播收到短信，等待入库后扫描未读, from=" + address
-                                + ", body=" + safe(bodyBuilder.toString()));
+                        XposedBridge.log(TAG + "广播收到短信，等待入库后扫描未读, body=" + safe(bodyBuilder.toString()));
 
                         // 不在广播阶段直接复制，统一等短信入库后扫描未读
                         scheduleUnreadScan("broadcast", 600);
@@ -257,13 +258,13 @@ public class SmsCodeAutoCopy {
         String code = extractCode(body);
         if (TextUtils.isEmpty(code)) {
             XposedBridge.log(TAG + "未识别到验证码, source=" + source
-                    + ", from=" + address + ", body=" + safe(body));
+                    + ", body=" + safe(body));
             return;
         }
 
         long now = System.currentTimeMillis();
         if (code.equals(sLastCopiedCode) && (now - sLastCopyTime) < 120000) {
-            XposedBridge.log(TAG + "验证码与上次相同，跳过复制: " + code + ", source=" + source);
+            XposedBridge.log(TAG + "验证码与上次相同，跳过重复复制, source=" + source);
             return;
         }
 
@@ -271,10 +272,10 @@ public class SmsCodeAutoCopy {
         sLastCopiedCode = code;
         sLastCopyTime = now;
 
-        XposedBridge.log(TAG + "已复制验证码: " + code + ", source=" + source + ", from=" + address);
+        XposedBridge.log(TAG + "已复制验证码, source=" + source);
         Toast.makeText(sAppContext, "验证码已复制: " + code, Toast.LENGTH_SHORT).show();
 
-        if (smsId > 0) {
+        if (MARK_SMS_AS_READ && smsId > 0) {
             markSmsAsRead(smsId);
         }
     }
@@ -316,9 +317,11 @@ public class SmsCodeAutoCopy {
         Matcher m2 = p2.matcher(body);
         if (m2.find()) return m2.group(1);
 
-        Pattern p3 = Pattern.compile("\\b([0-9]{4,8})\\b");
-        Matcher m3 = p3.matcher(body);
-        if (m3.find()) return m3.group(1);
+        if (ALLOW_LOOSE_NUMERIC_MATCH) {
+            Pattern p3 = Pattern.compile("\\b([0-9]{4,8})\\b");
+            Matcher m3 = p3.matcher(body);
+            if (m3.find()) return m3.group(1);
+        }
 
         return null;
     }
@@ -342,11 +345,7 @@ public class SmsCodeAutoCopy {
     }
 
     private static String safe(String s) {
-        if (s == null) return "";
-        s = s.replace("\n", "\\n").replace("\r", "");
-        if (s.length() > 80) {
-            return s.substring(0, 80) + "...";
-        }
-        return s;
+        if (s == null) return "[redacted]";
+        return "[redacted,length=" + s.length() + "]";
     }
 }

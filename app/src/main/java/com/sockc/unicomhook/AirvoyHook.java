@@ -45,6 +45,9 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
     private static final AtomicLong LAST_REWARD_TIME =
             new AtomicLong(0L);
 
+    private static final AtomicLong CLOSE_SESSION_ID =
+            new AtomicLong(0L);
+
     private static boolean lifecycleRegistered = false;
 
     /**
@@ -263,6 +266,8 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
      * 部分广告在奖励回调后仍会停留数秒，分阶段尝试关闭。
      */
     private static void scheduleCloseAttempts(Activity activity) {
+        final long sessionId = CLOSE_SESSION_ID.incrementAndGet();
+
         long[] delays = {
                 250L,
                 750L,
@@ -279,13 +284,27 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
             final int attempt = i;
 
             MAIN_HANDLER.postDelayed(
-                    () -> attemptClose(activity, attempt),
+                    () -> {
+                        if (sessionId != CLOSE_SESSION_ID.get()) {
+                            return;
+                        }
+
+                        if (attemptClose(activity, attempt)) {
+                            CLOSE_SESSION_ID.compareAndSet(
+                                    sessionId,
+                                    sessionId + 1L
+                            );
+                        }
+                    },
                     delays[i]
             );
         }
     }
 
-    private static void attemptClose(
+    /**
+     * @return true when this close session should stop scheduling further clicks.
+     */
+    private static boolean attemptClose(
             Activity rewardedActivity,
             int attempt
     ) {
@@ -294,16 +313,16 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
 
             if (current == null) {
                 log("第 " + attempt + " 次：当前 Activity 为空");
-                return;
+                return false;
             }
 
             if (current != rewardedActivity) {
-                log("Activity 已切换，停止本轮自动关闭");
-                return;
+                log("Activity 已切换，结束本轮自动关闭");
+                return true;
             }
 
             if (current.isFinishing() || current.isDestroyed()) {
-                return;
+                return true;
             }
 
             View decorView =
@@ -321,13 +340,13 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
                         + getViewDescription(candidate));
 
                 if (candidate.performClick()) {
-                    log("performClick 成功");
-                    return;
+                    log("performClick 成功，结束本轮任务");
+                    return true;
                 }
 
                 tapViewCenter(decorView, candidate);
                 log("已点击候选控件中心");
-                return;
+                return false;
             }
 
             String activityName =
@@ -343,15 +362,11 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
                             || containsWebView(decorView);
 
             if (!adActivity) {
-                log("当前界面不像广告界面，不执行坐标点击: "
+                log("当前界面已不像广告界面，结束本轮任务: "
                         + current.getClass().getName());
-                return;
+                return true;
             }
 
-            /*
-             * 先仅扫描，稍后才执行角落点击。
-             * 这发生在真实奖励回调后，不会提前跳过广告。
-             */
             if (attempt >= 1 && attempt <= 7) {
                 tapTopRight(decorView);
                 log("已尝试点击广告右上角，attempt=" + attempt);
@@ -360,8 +375,11 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
                 log("已补充尝试点击广告左上角");
             }
 
+            return false;
+
         } catch (Throwable throwable) {
             log("自动关闭异常: " + throwable);
+            return false;
         }
     }
 
