@@ -48,6 +48,19 @@ final class GaodeMinimalHomeEngine {
                     "更多"
             };
 
+    private static final String[] PROTECTED_MAP_CONTROLS =
+            new String[]{
+                    "图层",
+                    "定位",
+                    "路线"
+            };
+
+    private static final String[] TOP_PROMOTION_MARKERS =
+            new String[]{
+                    "题题有奖励",
+                    "奖金天天见"
+            };
+
     private static final String[] HOME_TOOL_LABELS =
             new String[]{
                     "驾车",
@@ -175,6 +188,16 @@ final class GaodeMinimalHomeEngine {
                 root
         );
 
+        hideTopPromotions(
+                activity,
+                root
+        );
+
+        hideUnwantedMapOverlays(
+                activity,
+                root
+        );
+
         if (searchAnchor != null) {
             trimExpandedHomePanel(
                     activity,
@@ -249,7 +272,7 @@ final class GaodeMinimalHomeEngine {
             Activity activity,
             ViewGroup group
     ) {
-        if (group.getChildCount() < 2
+        if (group.getChildCount() < 3
                 || group.getChildCount() > 7) {
             return false;
         }
@@ -265,7 +288,12 @@ final class GaodeMinimalHomeEngine {
                         .heightPixels;
 
         if (group.getWidth()
-                < screenWidth * 0.65f) {
+                < screenWidth * 0.65f
+                || group.getHeight()
+                > dp(
+                activity,
+                110
+        )) {
             return false;
         }
 
@@ -866,11 +894,453 @@ final class GaodeMinimalHomeEngine {
         ).trim();
     }
 
+    private static void hideTopPromotions(
+            Activity activity,
+            View root
+    ) {
+        hideTopPromotionsRecursive(
+                activity,
+                root,
+                0
+        );
+    }
+
+    private static void hideTopPromotionsRecursive(
+            Activity activity,
+            View view,
+            int depth
+    ) {
+        if (view == null
+                || depth > 28) {
+            return;
+        }
+
+        String text =
+                rawText(
+                        view
+                );
+
+        if (text != null) {
+            for (String marker
+                    : TOP_PROMOTION_MARKERS) {
+                if (text.contains(
+                        marker
+                )) {
+                    View host =
+                            findCompactHost(
+                                    activity,
+                                    view,
+                                    0.90f,
+                                    0.22f
+                            );
+
+                    if (host != null) {
+                        hide(
+                                host,
+                                "top_promotion:"
+                                        + marker
+                        );
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                hideTopPromotionsRecursive(
+                        activity,
+                        group.getChildAt(i),
+                        depth + 1
+                );
+            }
+        }
+    }
+
+    private static View findCompactHost(
+            Activity activity,
+            View start,
+            float maxWidthRatio,
+            float maxHeightRatio
+    ) {
+        if (start == null) {
+            return null;
+        }
+
+        int screenWidth =
+                activity.getResources()
+                        .getDisplayMetrics()
+                        .widthPixels;
+
+        int screenHeight =
+                activity.getResources()
+                        .getDisplayMetrics()
+                        .heightPixels;
+
+        View current =
+                start;
+        View best =
+                start;
+
+        for (int i = 0;
+                i < 7
+                        && current != null;
+                i++) {
+            ViewParent parent =
+                    current.getParent();
+
+            if (!(parent instanceof View)) {
+                break;
+            }
+
+            View candidate =
+                    (View) parent;
+
+            int width =
+                    candidate.getWidth();
+            int height =
+                    candidate.getHeight();
+
+            if (width <= 0
+                    || height <= 0) {
+                current =
+                        candidate;
+                continue;
+            }
+
+            if (width
+                    <= screenWidth
+                    * maxWidthRatio
+                    && height
+                    <= screenHeight
+                    * maxHeightRatio) {
+                best =
+                        candidate;
+                current =
+                        candidate;
+                continue;
+            }
+
+            break;
+        }
+
+        return best;
+    }
+
+    private static void hideUnwantedMapOverlays(
+            Activity activity,
+            View root
+    ) {
+        hideOverlayRecursive(
+                activity,
+                root,
+                0
+        );
+    }
+
+    private static void hideOverlayRecursive(
+            Activity activity,
+            View view,
+            int depth
+    ) {
+        if (view == null
+                || depth > 22
+                || view.getVisibility()
+                != View.VISIBLE) {
+            return;
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            // Process children first so a small concrete control is preferred
+            // over a larger container that groups several map controls.
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                hideOverlayRecursive(
+                        activity,
+                        group.getChildAt(i),
+                        depth + 1
+                );
+            }
+        }
+
+        if (!isSmallInteractiveOverlay(
+                activity,
+                view
+        )) {
+            return;
+        }
+
+        if (containsProtectedMapControl(
+                view,
+                0
+        )
+                || subtreeContainsSearch(
+                view,
+                0
+        )) {
+            return;
+        }
+
+        int[] location =
+                new int[2];
+
+        view.getLocationOnScreen(
+                location
+        );
+
+        int screenWidth =
+                activity.getResources()
+                        .getDisplayMetrics()
+                        .widthPixels;
+
+        int screenHeight =
+                activity.getResources()
+                        .getDisplayMetrics()
+                        .heightPixels;
+
+        float xRatio =
+                screenWidth <= 0
+                        ? 0f
+                        : (float) location[0]
+                        / screenWidth;
+
+        float yRatio =
+                screenHeight <= 0
+                        ? 0f
+                        : (float) location[1]
+                        / screenHeight;
+
+        String text =
+                normalizedText(
+                        view
+                );
+
+        boolean knownUnwanted =
+                text != null
+                        && ("更多".equals(text)
+                        || text.contains(
+                        "扫街榜"
+                )
+                        || text.contains(
+                        "3D"
+                ));
+
+        // Right-side middle controls: keep only 图层/定位/路线.
+        boolean rightMiddleUnknown =
+                xRatio > 0.72f
+                        && yRatio > 0.10f
+                        && yRatio < 0.62f;
+
+        // Lower-middle 3D globe / campaign bubble area.
+        boolean lowerMiddleUnknown =
+                xRatio > 0.48f
+                        && xRatio < 0.82f
+                        && yRatio > 0.58f
+                        && yRatio < 0.88f;
+
+        if (knownUnwanted
+                || rightMiddleUnknown
+                || lowerMiddleUnknown) {
+            hide(
+                    view,
+                    knownUnwanted
+                            ? "overlay:"
+                            + text
+                            : "overlay:non_whitelist"
+            );
+        }
+    }
+
+    private static boolean isSmallInteractiveOverlay(
+            Activity activity,
+            View view
+    ) {
+        int width =
+                view.getWidth();
+        int height =
+                view.getHeight();
+
+        if (width <= 0
+                || height <= 0) {
+            return false;
+        }
+
+        int screenWidth =
+                activity.getResources()
+                        .getDisplayMetrics()
+                        .widthPixels;
+
+        int screenHeight =
+                activity.getResources()
+                        .getDisplayMetrics()
+                        .heightPixels;
+
+        if (width
+                > screenWidth * 0.32f
+                || height
+                > screenHeight * 0.20f) {
+            return false;
+        }
+
+        return view.isClickable()
+                || view.isFocusable()
+                || hasInteractiveDescendant(
+                view,
+                0
+        );
+    }
+
+    private static boolean hasInteractiveDescendant(
+            View view,
+            int depth
+    ) {
+        if (!(view instanceof ViewGroup)
+                || depth > 5) {
+            return false;
+        }
+
+        ViewGroup group =
+                (ViewGroup) view;
+
+        for (int i = 0;
+                i < group.getChildCount();
+                i++) {
+            View child =
+                    group.getChildAt(i);
+
+            if (child.isClickable()
+                    || child.isFocusable()) {
+                return true;
+            }
+
+            if (hasInteractiveDescendant(
+                    child,
+                    depth + 1
+            )) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean containsProtectedMapControl(
+            View view,
+            int depth
+    ) {
+        if (view == null
+                || depth > 8) {
+            return false;
+        }
+
+        String text =
+                normalizedText(
+                        view
+                );
+
+        if (text != null) {
+            for (String marker
+                    : PROTECTED_MAP_CONTROLS) {
+                if (marker.equals(
+                        text
+                )) {
+                    return true;
+                }
+            }
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                if (containsProtectedMapControl(
+                        group.getChildAt(i),
+                        depth + 1
+                )) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean subtreeContainsSearch(
+            View view,
+            int depth
+    ) {
+        if (view == null
+                || depth > 16) {
+            return false;
+        }
+
+        String text =
+                rawText(
+                        view
+                );
+
+        if (text != null) {
+            for (String marker
+                    : SEARCH_MARKERS) {
+                if (text.contains(
+                        marker
+                )) {
+                    return true;
+                }
+            }
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                if (subtreeContainsSearch(
+                        group.getChildAt(i),
+                        depth + 1
+                )) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static void hide(
             View view,
             String reason
     ) {
         if (view == null) {
+            return;
+        }
+
+        if (subtreeContainsSearch(
+                view,
+                0
+        )) {
+            XposedBridge.log(
+                    TAG
+                            + "KEEP search branch reason="
+                            + reason
+                            + " cls="
+                            + view.getClass()
+                            .getName()
+            );
             return;
         }
 
