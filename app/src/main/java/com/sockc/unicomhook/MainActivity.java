@@ -153,7 +153,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.4.1 · 原生 Scope 请求与选择器优化",
+                "V1.4.2 · 验证码 V2 · 高德/游戏助手 R2",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
