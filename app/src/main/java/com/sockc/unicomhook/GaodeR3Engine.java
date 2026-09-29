@@ -7,12 +7,15 @@ import android.view.ViewParent;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 import com.sockc.unicomhook.compat.XC_MethodHook;
 import com.sockc.unicomhook.compat.XposedBridge;
@@ -62,6 +65,11 @@ final class GaodeR3Engine {
     private static final Set<String> hitIds =
             Collections.synchronizedSet(
                     new HashSet<String>()
+            );
+
+    private static final Map<View, String> textAnchors =
+            Collections.synchronizedMap(
+                    new WeakHashMap<View, String>()
             );
 
     private static volatile boolean exploreLocalEnabled;
@@ -297,7 +305,7 @@ final class GaodeR3Engine {
 
                                         String text =
                                                 extractLikelyText(
-                                                        param.args
+                                                        param
                                                 );
 
                                         if (text == null
@@ -342,6 +350,11 @@ final class GaodeR3Engine {
             View view,
             String text
     ) {
+        textAnchors.put(
+                view,
+                text
+        );
+
         if (exploreLocalEnabled
                 && "探索本地".equals(
                 text
@@ -570,26 +583,25 @@ final class GaodeR3Engine {
             return null;
         }
 
-        if (view instanceof TextView) {
-            CharSequence value =
-                    ((TextView) view)
-                            .getText();
+        String direct =
+                textFor(
+                        view
+                );
 
-            if (value != null) {
-                String text =
-                        normalize(
-                                value.toString()
-                        );
+        if (direct != null) {
+            String text =
+                    normalize(
+                            direct
+                    );
 
-                if ("首页".equals(text)
-                        || "探索".equals(text)
-                        || "AI对话".equals(text)
-                        || "路线".equals(text)
-                        || "长按说话".equals(text)
-                        || "打车".equals(text)
-                        || "我的".equals(text)) {
-                    return text;
-                }
+            if ("首页".equals(text)
+                    || "探索".equals(text)
+                    || "AI对话".equals(text)
+                    || "路线".equals(text)
+                    || "长按说话".equals(text)
+                    || "打车".equals(text)
+                    || "我的".equals(text)) {
+                return text;
             }
         }
 
@@ -638,6 +650,10 @@ final class GaodeR3Engine {
             if (isAjxList(
                     parentView
             )) {
+                installListAdapterHook(
+                        parentView
+                );
+
                 return collapseSafely(
                         current,
                         reason,
@@ -833,16 +849,56 @@ final class GaodeR3Engine {
     }
 
     private static String extractLikelyText(
-            Object[] args
+            XC_MethodHook.MethodHookParam param
     ) {
-        if (args == null) {
+        if (param == null
+                || param.args == null) {
             return null;
         }
 
-        String candidate =
-                null;
+        String methodName =
+                param.method == null
+                        ? ""
+                        : param.method.getName();
 
-        for (Object arg : args) {
+        if ("setText".equals(
+                methodName
+        )) {
+            for (Object arg : param.args) {
+                if (arg instanceof String) {
+                    String value =
+                            ((String) arg)
+                                    .trim();
+
+                    if (!value.isEmpty()) {
+                        return value;
+                    }
+                }
+            }
+        }
+
+        if ("setAttribute".equals(
+                methodName
+        )
+                && param.args.length >= 2
+                && param.args[0]
+                instanceof String) {
+            String attribute =
+                    ((String) param.args[0])
+                            .trim()
+                            .toLowerCase();
+
+            if (("text".equals(attribute)
+                    || "value".equals(attribute)
+                    || "content".equals(attribute))
+                    && param.args[1]
+                    instanceof String) {
+                return ((String) param.args[1])
+                        .trim();
+            }
+        }
+
+        for (Object arg : param.args) {
             if (!(arg instanceof String)) {
                 continue;
             }
@@ -851,20 +907,378 @@ final class GaodeR3Engine {
                     ((String) arg)
                             .trim();
 
-            if (value.isEmpty()
-                    || "text".equalsIgnoreCase(
-                    value
+            if ("探索本地".equals(
+                    normalize(
+                            value
+                    )
+            )
+                    || value.contains(
+                    "扫街榜"
+            )
+                    || value.contains(
+                    "订周末"
             )) {
-                continue;
-            }
-
-            if (value.length() <= 40) {
-                candidate =
-                        value;
+                return value;
             }
         }
 
-        return candidate;
+        return null;
+    }
+
+    private static void installListAdapterHook(
+            View list
+    ) {
+        if (list == null) {
+            return;
+        }
+
+        try {
+            Method getAdapter =
+                    findNoArgMethod(
+                            list.getClass(),
+                            "getAdapter"
+                    );
+
+            if (getAdapter == null) {
+                return;
+            }
+
+            getAdapter.setAccessible(
+                    true
+            );
+
+            Object adapter =
+                    getAdapter.invoke(
+                            list
+                    );
+
+            if (adapter == null) {
+                return;
+            }
+
+            Class<?> adapterClass =
+                    adapter.getClass();
+
+            String id =
+                    "ajx_bind:"
+                            + adapterClass.getName();
+
+            if (!installedIds.add(id)) {
+                return;
+            }
+
+            Method bind =
+                    findBindMethod(
+                            adapterClass
+                    );
+
+            if (bind == null) {
+                XposedBridge.log(
+                        TAG
+                                + "BIND MISS "
+                                + adapterClass.getName()
+                );
+                return;
+            }
+
+            bind.setAccessible(
+                    true
+            );
+
+            XposedBridge.hookMethod(
+                    bind,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(
+                                MethodHookParam param
+                        ) {
+                            View item =
+                                    itemViewOf(
+                                            param.args != null
+                                                    && param.args.length > 0
+                                                    ? param.args[0]
+                                                    : null
+                                    );
+
+                            if (item == null) {
+                                return;
+                            }
+
+                            processBoundItem(
+                                    item
+                            );
+                        }
+                    }
+            );
+
+            XposedBridge.log(
+                    TAG
+                            + "BIND HOOKED "
+                            + adapterClass.getName()
+            );
+        } catch (Throwable throwable) {
+            XposedBridge.log(
+                    TAG
+                            + "BIND hook failed: "
+                            + throwable
+            );
+        }
+    }
+
+    private static Method findNoArgMethod(
+            Class<?> type,
+            String name
+    ) {
+        for (Class<?> current = type;
+                current != null
+                        && current != Object.class;
+                current =
+                        current.getSuperclass()) {
+            try {
+                return current.getDeclaredMethod(
+                        name
+                );
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
+
+        return null;
+    }
+
+    private static Method findBindMethod(
+            Class<?> type
+    ) {
+        for (Class<?> current = type;
+                current != null
+                        && current != Object.class;
+                current =
+                        current.getSuperclass()) {
+            for (Method method
+                    : current.getDeclaredMethods()) {
+                if ("onBindViewHolder".equals(
+                        method.getName()
+                )
+                        && method.getParameterTypes()
+                        .length == 2
+                        && !Modifier.isAbstract(
+                        method.getModifiers()
+                )) {
+                    return method;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static View itemViewOf(
+            Object holder
+    ) {
+        if (holder == null) {
+            return null;
+        }
+
+        if (holder instanceof View) {
+            return (View) holder;
+        }
+
+        for (Class<?> current =
+                holder.getClass();
+                current != null
+                        && current != Object.class;
+                current =
+                        current.getSuperclass()) {
+            try {
+                Field field =
+                        current.getDeclaredField(
+                                "itemView"
+                        );
+
+                field.setAccessible(
+                        true
+                );
+
+                Object value =
+                        field.get(
+                                holder
+                        );
+
+                if (value instanceof View) {
+                    return (View) value;
+                }
+            } catch (NoSuchFieldException ignored) {
+            } catch (Throwable throwable) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static void processBoundItem(
+            View item
+    ) {
+        if (item == null) {
+            return;
+        }
+
+        if (exploreLocalEnabled
+                && subtreeContainsText(
+                item,
+                "探索本地",
+                0
+        )) {
+            if (collapseSafely(
+                    item,
+                    "bind:explore_local",
+                    0.62f
+            )) {
+                logHit(
+                        "bind:explore_local"
+                );
+            }
+            return;
+        }
+
+        if (floatBadgesEnabled) {
+            View badge =
+                    findAnchoredView(
+                            item,
+                            FLOAT_TEXTS,
+                            0
+                    );
+
+            if (badge != null
+                    && hideOperationalHost(
+                    badge,
+                    "bind:badge"
+            )) {
+                logHit(
+                        "bind:badge"
+                );
+            }
+        }
+    }
+
+    private static boolean subtreeContainsText(
+            View view,
+            String expected,
+            int depth
+    ) {
+        if (view == null
+                || depth > 12) {
+            return false;
+        }
+
+        String text =
+                textFor(
+                        view
+                );
+
+        if (expected.equals(
+                normalize(
+                        text
+                )
+        )) {
+            return true;
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                if (subtreeContainsText(
+                        group.getChildAt(i),
+                        expected,
+                        depth + 1
+                )) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static View findAnchoredView(
+            View view,
+            String[] tokens,
+            int depth
+    ) {
+        if (view == null
+                || depth > 12) {
+            return null;
+        }
+
+        String text =
+                textFor(
+                        view
+                );
+
+        if (text != null) {
+            for (String token : tokens) {
+                if (text.contains(
+                        token
+                )) {
+                    return view;
+                }
+            }
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                View found =
+                        findAnchoredView(
+                                group.getChildAt(i),
+                                tokens,
+                                depth + 1
+                        );
+
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static String textFor(
+            View view
+    ) {
+        String anchored =
+                textAnchors.get(
+                        view
+                );
+
+        if (anchored != null) {
+            return anchored;
+        }
+
+        if (view instanceof TextView) {
+            CharSequence value =
+                    ((TextView) view)
+                            .getText();
+
+            if (value != null) {
+                return value.toString();
+            }
+        }
+
+        CharSequence description =
+                view.getContentDescription();
+
+        return description == null
+                ? null
+                : description.toString();
     }
 
     private static String normalize(
