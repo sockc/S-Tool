@@ -2,6 +2,24 @@
 
 S Tool 是一个基于 LSPosed / libxposed 的 Android 功能增强与隐私工具集合。
 
+## V1.4.3.1 高德开屏紧急修复
+
+V1.4.3.1 修复部分高德版本在 V1.4.3 中停留开屏、进程不崩溃但无法进入首页的问题。
+
+### 启动链修复
+
+- 不再直接吞掉 `SplashScreenServiceImpl.fetchRealTime()`。
+- 不再强改 `isSplashShowing()` / `isContinueLaunchMaskViewShowing()`。
+- 不再直接吞掉 `showSplashMaskView()`。
+- 不再拦截开屏 AJX linkage getter。
+- 17.x 继续使用 `BootBizDataPreloaderImpl.canShowSplash() = false`，让高德自己的状态机走无广告收尾分支。
+- 16.x 新增 `u96.g(int,String)` / `za6.g(int,String)` 兼容：原方法先正常执行，再仅把返回对象中的 finish-reason 字段调整为 NO_SPLASH。
+- 只观察 `com.autonavi.minimap.g.e(...)` 是否真正进入开屏收尾，不修改其行为。
+
+原则改为：**优先改变“是否展示广告”的决策，不截断启动任务、回调或状态链。**
+
+高德 R3 的 AJX 首页精简、底栏重排与 R2 fallback 保留不变。
+
 ## V1.4.3 高德 R3
 
 V1.4.3 重写高德处理链路，不再把 View 文本扫描当主方案。
@@ -142,4 +160,4 @@ GitHub Debug/Release 稳定签名使用：
 
 ## 版本
 
-当前开发版本：V1.4.2
+当前开发版本：V1.4.3.1
