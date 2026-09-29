@@ -64,9 +64,9 @@ public class UnicomHook implements IXposedHookLoadPackage {
                 );
 
         boolean universalLocationPrivacy =
-                config.isEnabled(
-                        "universal_privacy",
-                        "universal_privacy.location"
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_LOCATION,
+                        TARGET_PACKAGE
                 );
 
         XposedBridge.log(
