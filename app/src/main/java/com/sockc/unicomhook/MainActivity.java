@@ -153,7 +153,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.4.3 · 高德 R3 精准规则",
+                "V1.4.3.1 · 高德开屏紧急修复",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
