@@ -8,6 +8,8 @@
         <package android:name="com.ganji.android.haoche" />
         <package android:name="com.hikvision.hikconnect" />
         <package android:name="com.oplus.games" />
+        <package android:name="com.coloros.gamespaceui" />
+        <package android:name="com.coloros.gamespace" />
         <package android:name="com.tencent.mobileqq" />
         <package android:name="com.taobao.idlefish" />
         <package android:name="com.tencent.android.qqdownloader" />
