@@ -26,24 +26,29 @@ public final class SMainHook implements IXposedHookLoadPackage {
     private static final class HookEntry {
         final String featureId;
         final String requiredSubFeatureId;
-        final IXposedHookLoadPackage delegate;
+        final String delegateClassName;
 
         HookEntry(
                 String featureId,
-                IXposedHookLoadPackage delegate
+                String delegateClassName
         ) {
-            this(featureId, null, delegate);
+            this(
+                    featureId,
+                    null,
+                    delegateClassName
+            );
         }
 
         HookEntry(
                 String featureId,
                 String requiredSubFeatureId,
-                IXposedHookLoadPackage delegate
+                String delegateClassName
         ) {
             this.featureId = featureId;
             this.requiredSubFeatureId =
                     requiredSubFeatureId;
-            this.delegate = delegate;
+            this.delegateClassName =
+                    delegateClassName;
         }
     }
 
@@ -51,84 +56,84 @@ public final class SMainHook implements IXposedHookLoadPackage {
             new HookEntry[] {
                     new HookEntry(
                             "universal_privacy",
-                            new UniversalPrivacyHook()
+                            "com.sockc.unicomhook.UniversalPrivacyHook"
                     ),
                     new HookEntry(
                             "unicom",
-                            new UnicomHook()
+                            "com.sockc.unicomhook.UnicomHook"
                     ),
                     new HookEntry(
                             "unicom",
                             "unicom.screenshot_privacy",
-                            new ScreenshotPrivacyHook()
+                            "com.sockc.unicomhook.ScreenshotPrivacyHook"
                     ),
                     new HookEntry(
                             "gaode",
-                            new GaodeHook()
+                            "com.sockc.unicomhook.GaodeHook"
                     ),
                     new HookEntry(
                             "taobao",
-                            new TaobaoHook()
+                            "com.sockc.unicomhook.TaobaoHook"
                     ),
                     new HookEntry(
                             "tiktok",
-                            new TiktokHook()
+                            "com.sockc.unicomhook.TiktokHook"
                     ),
                     new HookEntry(
                             "qq",
-                            new QQHook()
+                            "com.sockc.unicomhook.QQHook"
                     ),
                     new HookEntry(
                             "hikvision",
-                            new HikvisionHook()
+                            "com.sockc.unicomhook.HikvisionHook"
                     ),
                     new HookEntry(
                             "guazi",
-                            new GuaziHook()
+                            "com.sockc.unicomhook.GuaziHook"
                     ),
                     new HookEntry(
                             "che300",
-                            new Che300Hook()
+                            "com.sockc.unicomhook.Che300Hook"
                     ),
                     new HookEntry(
                             "firsty",
-                            new FirstyHook()
+                            "com.sockc.unicomhook.FirstyHook"
                     ),
                     new HookEntry(
                             "meituan",
-                            new MeituanHook()
+                            "com.sockc.unicomhook.MeituanHook"
                     ),
                     new HookEntry(
                             "pinduoduo",
-                            new PinduoduoHook()
+                            "com.sockc.unicomhook.PinduoduoHook"
                     ),
                     new HookEntry(
                             "clipboard",
-                            new ClipboardHook()
+                            "com.sockc.unicomhook.ClipboardHook"
                     ),
                     new HookEntry(
                             "zhihuijia",
-                            new ZhihuijiaHook()
+                            "com.sockc.unicomhook.ZhihuijiaHook"
                     ),
                     new HookEntry(
                             "xianyu",
-                            new XianyuHook()
+                            "com.sockc.unicomhook.XianyuHook"
                     ),
                     new HookEntry(
                             "sms_code",
-                            new SmsCodeHook()
+                            "com.sockc.unicomhook.SmsCodeHook"
                     ),
                     new HookEntry(
                             "yingyongbao",
-                            new YingyongbaoHook()
+                            "com.sockc.unicomhook.YingyongbaoHook"
                     ),
                     new HookEntry(
                             "oplus_game",
-                            new OplusGameHook()
+                            "com.sockc.unicomhook.OplusGameHook"
                     ),
                     new HookEntry(
                             "airvoy",
-                            new AirvoyHook()
+                            "com.sockc.unicomhook.AirvoyHook"
                     )
             };
 
@@ -247,16 +252,36 @@ public final class SMainHook implements IXposedHookLoadPackage {
             }
 
             try {
-                entry.delegate.handleLoadPackage(
-                        lpparam
-                );
+                Class<?> hookClass =
+                        XposedHelpers.findClass(
+                                entry.delegateClassName,
+                                SMainHook.class
+                                        .getClassLoader()
+                        );
+
+                Object hook =
+                        hookClass.newInstance();
+
+                if (!(hook
+                        instanceof IXposedHookLoadPackage)) {
+                    XposedBridge.log(
+                            TAG
+                                    + entry.delegateClassName
+                                    + " 未实现 IXposedHookLoadPackage"
+                    );
+                    continue;
+                }
+
+                ((IXposedHookLoadPackage) hook)
+                        .handleLoadPackage(
+                                lpparam
+                        );
             } catch (Throwable throwable) {
                 XposedBridge.log(
                         TAG
-                                + entry.delegate
-                                .getClass()
-                                .getSimpleName()
-                                + " failed for "
+                                + "Hook 初始化/执行失败 "
+                                + entry.delegateClassName
+                                + " for "
                                 + lpparam.packageName
                                 + ": "
                                 + throwable
