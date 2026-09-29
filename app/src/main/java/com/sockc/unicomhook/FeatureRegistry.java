@@ -3,9 +3,23 @@ package com.sockc.unicomhook;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class FeatureRegistry {
+
+    public static final String UNIVERSAL_PRIVACY =
+            "universal_privacy";
+    public static final String UNIVERSAL_LOCATION =
+            "universal_privacy.location";
+    public static final String UNIVERSAL_SCREENSHOT =
+            "universal_privacy.screenshot";
+
+    private static final String LOCATION_APP_PREFIX =
+            "universal_privacy.location.app.";
+    private static final String SCREENSHOT_APP_PREFIX =
+            "universal_privacy.screenshot.app.";
 
     public static final class SubFeature {
         public final String id;
@@ -52,6 +66,19 @@ public final class FeatureRegistry {
             this.subFeatures = Collections.unmodifiableList(
                     subFeatures
             );
+        }
+    }
+
+    public static final class TargetApp {
+        public final String title;
+        public final String packageName;
+
+        private TargetApp(
+                String title,
+                String packageName
+        ) {
+            this.title = title;
+            this.packageName = packageName;
         }
     }
 
@@ -136,18 +163,18 @@ public final class FeatureRegistry {
     private static final List<Feature> FEATURES =
             Collections.unmodifiableList(Arrays.asList(
                     featureWithSubs(
-                            "universal_privacy",
+                            UNIVERSAL_PRIVACY,
                             "通用隐私保护",
-                            "作用于 LSPosed 已勾选的目标 App；升级后默认关闭",
+                            "定位与截图可按 App 分别控制",
                             false,
                             Arrays.asList(
                                     sub(
-                                            "universal_privacy.location",
+                                            UNIVERSAL_LOCATION,
                                             "通用定位保护",
                                             "阻断 Android 原生最近定位、当前定位与持续定位请求"
                                     ),
                                     sub(
-                                            "universal_privacy.screenshot",
+                                            UNIVERSAL_SCREENSHOT,
                                             "通用截图隐私",
                                             "阻止 Android 14+ 截图回调注册与常见媒体库截图监听"
                                     )
@@ -370,27 +397,153 @@ public final class FeatureRegistry {
         return FEATURES;
     }
 
+    public static Feature findFeature(
+            String featureId
+    ) {
+        for (Feature feature : FEATURES) {
+            if (feature.id.equals(featureId)) {
+                return feature;
+            }
+        }
+
+        return null;
+    }
+
+    public static boolean appliesToPackage(
+            String featureId,
+            String packageName
+    ) {
+        Feature feature =
+                findFeature(
+                        featureId
+                );
+
+        if (feature == null) {
+            return false;
+        }
+
+        if (feature.packages.isEmpty()) {
+            return true;
+        }
+
+        return feature.packages.contains(
+                packageName
+        );
+    }
+
+    public static List<TargetApp> targetApps() {
+        Map<String, TargetApp> apps =
+                new LinkedHashMap<>();
+
+        for (Feature feature : FEATURES) {
+            if (UNIVERSAL_PRIVACY.equals(
+                    feature.id
+            )) {
+                continue;
+            }
+
+            for (String packageName
+                    : feature.packages) {
+                if (!apps.containsKey(
+                        packageName
+                )) {
+                    apps.put(
+                            packageName,
+                            new TargetApp(
+                                    feature.title,
+                                    packageName
+                            )
+                    );
+                }
+            }
+        }
+
+        return Collections.unmodifiableList(
+                new ArrayList<>(
+                        apps.values()
+                )
+        );
+    }
+
+    public static String titleForPackage(
+            String packageName
+    ) {
+        for (TargetApp app : targetApps()) {
+            if (app.packageName.equals(
+                    packageName
+            )) {
+                return app.title;
+            }
+        }
+
+        return packageName;
+    }
+
+    public static String universalAppKey(
+            String capabilityId,
+            String packageName
+    ) {
+        String prefix =
+                UNIVERSAL_SCREENSHOT.equals(
+                        capabilityId
+                )
+                        ? SCREENSHOT_APP_PREFIX
+                        : LOCATION_APP_PREFIX;
+
+        return prefix + packageName;
+    }
+
     public static List<String> allPreferenceKeys() {
-        List<String> keys = new ArrayList<>();
+        List<String> keys =
+                new ArrayList<>();
 
         for (Feature feature : FEATURES) {
             keys.add(feature.id);
 
-            for (SubFeature subFeature : feature.subFeatures) {
+            for (SubFeature subFeature
+                    : feature.subFeatures) {
                 keys.add(subFeature.id);
             }
+        }
+
+        for (TargetApp app : targetApps()) {
+            keys.add(
+                    universalAppKey(
+                            UNIVERSAL_LOCATION,
+                            app.packageName
+                    )
+            );
+            keys.add(
+                    universalAppKey(
+                            UNIVERSAL_SCREENSHOT,
+                            app.packageName
+                    )
+            );
         }
 
         return keys;
     }
 
-    public static boolean defaultEnabled(String key) {
+    public static boolean defaultEnabled(
+            String key
+    ) {
+        if (key != null
+                && (key.startsWith(
+                        LOCATION_APP_PREFIX
+                )
+                || key.startsWith(
+                        SCREENSHOT_APP_PREFIX
+                ))) {
+            return false;
+        }
+
         for (Feature feature : FEATURES) {
             if (feature.id.equals(key)) {
                 return feature.defaultEnabled;
             }
 
-            for (SubFeature subFeature : feature.subFeatures) {
+            for (SubFeature subFeature
+                    : feature.subFeatures) {
                 if (subFeature.id.equals(key)) {
                     return subFeature.defaultEnabled;
                 }
