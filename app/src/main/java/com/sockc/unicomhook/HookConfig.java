@@ -5,7 +5,6 @@ import android.os.Bundle;
 
 import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
 
 final class HookConfig {
 
@@ -13,6 +12,8 @@ final class HookConfig {
             "S-Tool/Config: ";
     private static final String MODULE_PACKAGE =
             "com.sockc.unicomhook";
+
+    private static volatile HookConfig cached;
 
     private final Bundle providerValues;
     private final XSharedPreferences legacyPreferences;
@@ -31,22 +32,59 @@ final class HookConfig {
                 legacyReadable;
     }
 
-    static HookConfig load() {
-        Bundle providerValues =
-                loadFromProvider();
+    static HookConfig load(
+            Context context
+    ) {
+        HookConfig existing = cached;
 
-        if (providerValues != null) {
-            XposedBridge.log(
-                    TAG + "配置来源=ConfigProvider"
-            );
-
-            return new HookConfig(
-                    providerValues,
-                    null,
-                    false
-            );
+        if (existing != null) {
+            return existing;
         }
 
+        synchronized (HookConfig.class) {
+            existing = cached;
+
+            if (existing != null) {
+                return existing;
+            }
+
+            Bundle providerValues =
+                    loadFromProvider(
+                            context
+                    );
+
+            if (providerValues != null) {
+                XposedBridge.log(
+                        TAG + "配置来源=ConfigProvider"
+                );
+
+                existing = new HookConfig(
+                        providerValues,
+                        null,
+                        false
+                );
+
+                cached = existing;
+                return existing;
+            }
+
+            existing = loadLegacy();
+            cached = existing;
+            return existing;
+        }
+    }
+
+    static HookConfig load() {
+        HookConfig existing = cached;
+
+        if (existing != null) {
+            return existing;
+        }
+
+        return loadLegacy();
+    }
+
+    private static HookConfig loadLegacy() {
         try {
             XSharedPreferences preferences =
                     new XSharedPreferences(
@@ -91,10 +129,9 @@ final class HookConfig {
         }
     }
 
-    private static Bundle loadFromProvider() {
-        Context context =
-                findEarlyContext();
-
+    private static Bundle loadFromProvider(
+            Context context
+    ) {
         if (context == null) {
             return null;
         }
@@ -123,39 +160,6 @@ final class HookConfig {
                     TAG + "ConfigProvider 读取失败: "
                             + throwable
             );
-            return null;
-        }
-    }
-
-    private static Context findEarlyContext() {
-        try {
-            Class<?> activityThreadClass =
-                    XposedHelpers.findClass(
-                            "android.app.ActivityThread",
-                            null
-                    );
-
-            Object activityThread =
-                    XposedHelpers.callStaticMethod(
-                            activityThreadClass,
-                            "currentActivityThread"
-                    );
-
-            if (activityThread == null) {
-                return null;
-            }
-
-            Object systemContext =
-                    XposedHelpers.callMethod(
-                            activityThread,
-                            "getSystemContext"
-                    );
-
-            return systemContext
-                    instanceof Context
-                    ? (Context) systemContext
-                    : null;
-        } catch (Throwable ignored) {
             return null;
         }
     }

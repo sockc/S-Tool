@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.1
+
+### Injection entry fix
+- Move feature dispatch from the earliest `handleLoadPackage()` stage to `Application.attach(Context)`.
+- Read ConfigProvider settings with the hooked target app's real Context instead of an early system Context.
+- Cache that target-process configuration so feature Hooks that reload settings reuse the verified snapshot.
+- Keep immediate default-config dispatch as a fallback if the Application.attach hook itself cannot be installed.
+
+### Real injection diagnostics
+- Add a validated `report_injection` ConfigProvider call.
+- Verify the reported package belongs to the Binder caller UID before recording it.
+- Persist last injection timestamps separately from feature configuration.
+- Show real injection coverage and per-target last injection time in the manager.
+- Refresh diagnostics whenever the manager returns to the foreground.
+- ConfigProvider protocol bumped to v3.
+
+### Version
+- Bump app version to `1.3.1` / versionCode `131`.
+
 ## 1.3.0
 
 ### Universal privacy

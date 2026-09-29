@@ -4,8 +4,10 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Binder;
 import android.os.Bundle;
 
 public final class ConfigProvider extends ContentProvider {
@@ -19,13 +21,21 @@ public final class ConfigProvider extends ContentProvider {
             "ping";
     public static final String METHOD_GET_ALL =
             "get_all";
+    public static final String METHOD_REPORT_INJECTION =
+            "report_injection";
 
     public static final String KEY_PROTOCOL_VERSION =
             "_protocol_version";
     public static final String KEY_PROVIDER_READY =
             "_provider_ready";
+    public static final String KEY_PACKAGE_NAME =
+            "_package_name";
+    public static final String KEY_PROCESS_NAME =
+            "_process_name";
+    public static final String KEY_RECORDED =
+            "_recorded";
 
-    public static final int PROTOCOL_VERSION = 2;
+    public static final int PROTOCOL_VERSION = 3;
 
     @Override
     public boolean onCreate() {
@@ -53,6 +63,12 @@ public final class ConfigProvider extends ContentProvider {
 
         if (METHOD_GET_ALL.equals(method)) {
             return buildConfigBundle();
+        }
+
+        if (METHOD_REPORT_INJECTION.equals(method)) {
+            return recordInjection(
+                    extras
+            );
         }
 
         return super.call(
@@ -127,6 +143,77 @@ public final class ConfigProvider extends ContentProvider {
         return result;
     }
 
+    private Bundle recordInjection(
+            Bundle extras
+    ) {
+        Bundle result = new Bundle();
+        result.putBoolean(
+                KEY_RECORDED,
+                false
+        );
+
+        Context context = getContext();
+
+        if (context == null
+                || extras == null) {
+            return result;
+        }
+
+        String packageName =
+                extras.getString(
+                        KEY_PACKAGE_NAME
+                );
+
+        if (!callerOwnsPackage(
+                context,
+                packageName
+        )) {
+            return result;
+        }
+
+        InjectionStatus.record(
+                context,
+                packageName
+        );
+
+        result.putBoolean(
+                KEY_RECORDED,
+                true
+        );
+
+        return result;
+    }
+
+    private boolean callerOwnsPackage(
+            Context context,
+            String packageName
+    ) {
+        if (packageName == null
+                || packageName.trim().isEmpty()) {
+            return false;
+        }
+
+        PackageManager packageManager =
+                context.getPackageManager();
+
+        String[] packages =
+                packageManager.getPackagesForUid(
+                        Binder.getCallingUid()
+                );
+
+        if (packages == null) {
+            return false;
+        }
+
+        for (String candidate : packages) {
+            if (packageName.equals(candidate)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static boolean isAvailable(
             Context context
     ) {
@@ -147,6 +234,46 @@ public final class ConfigProvider extends ContentProvider {
             return result != null
                     && result.getBoolean(
                     KEY_PROVIDER_READY,
+                    false
+            );
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static boolean reportInjection(
+            Context context,
+            String packageName,
+            String processName
+    ) {
+        if (context == null
+                || packageName == null) {
+            return false;
+        }
+
+        try {
+            Bundle extras = new Bundle();
+            extras.putString(
+                    KEY_PACKAGE_NAME,
+                    packageName
+            );
+            extras.putString(
+                    KEY_PROCESS_NAME,
+                    processName
+            );
+
+            Bundle result =
+                    context.getContentResolver()
+                            .call(
+                                    CONTENT_URI,
+                                    METHOD_REPORT_INJECTION,
+                                    null,
+                                    extras
+                            );
+
+            return result != null
+                    && result.getBoolean(
+                    KEY_RECORDED,
                     false
             );
         } catch (Throwable ignored) {
