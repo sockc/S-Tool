@@ -58,6 +58,11 @@ public final class SMainHook
                             "com.sockc.unicomhook.UniversalPrivacyHook"
                     ),
                     new HookEntry(
+                            FeatureRegistry.UNIVERSAL_TOOLS,
+                            FeatureRegistry.UNIVERSAL_SPLASH_SKIP,
+                            "com.sockc.unicomhook.UniversalSplashSkipHook"
+                    ),
+                    new HookEntry(
                             "unicom",
                             "com.sockc.unicomhook.UnicomHook"
                     ),

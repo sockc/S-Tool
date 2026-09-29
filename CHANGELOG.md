@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.4.4
+
+### Universal splash-ad skipper
+- Add an arbitrary-app universal cold-start splash-ad skip capability.
+- Reuse the existing searchable app selector and native LSPosed Scope Request flow.
+- Scan only during the first 10 seconds of the selected app's main process.
+- Score candidates using visible text/content descriptions, resource identifiers, ad/splash hierarchy context, screen position and clickability.
+- Use a strict score threshold and at most one successful native `performClick()` per process session.
+- Add negative scoring for onboarding/login/tutorial/permission contexts and non-ad “skip” phrases.
+- Never hook ad SDK load/show methods and never modify app launch callbacks or state machines.
+
+### Diagnostics
+- Add validated target-process reporting for successful universal splash skips.
+- Store only package-scoped success time, daily count and score; do not store button text or ad content.
+- Show per-app “today success / recent time / score” in the app selector.
+- ConfigProvider protocol bumped to v8.
+
+### Version
+- Bump app version to `1.4.4` / versionCode `1440`.
+
 ## 1.4.3.3
 
 ### Gaode search whitelist

@@ -153,7 +153,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.4.3.3 · 高德搜索白名单",
+                "V1.4.4 · 通用开屏广告跳过",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -242,13 +242,30 @@ public final class MainActivity extends Activity {
         );
 
         root.addView(
+                sectionTitle("通用功能"),
+                topMargin(dp(24))
+        );
+
+        root.addView(
+                buildUniversalMenuCard(
+                        FeatureRegistry.UNIVERSAL_SPLASH_SKIP,
+                        "通用开屏广告跳过",
+                        "冷启动前 10 秒严格识别可见“跳过/关闭广告”控件；仅执行一次原生点击"
+                ),
+                topMargin(dp(10))
+        );
+
+        root.addView(
                 sectionTitle("应用增强"),
                 topMargin(dp(24))
         );
 
         for (FeatureRegistry.Feature feature
                 : FeatureRegistry.all()) {
-            if ("universal_privacy".equals(
+            if (FeatureRegistry.UNIVERSAL_PRIVACY.equals(
+                    feature.id
+            )
+                    || FeatureRegistry.UNIVERSAL_TOOLS.equals(
                     feature.id
             )) {
                 continue;
@@ -261,9 +278,9 @@ public final class MainActivity extends Activity {
         }
 
         TextView footer = text(
-                "六类通用隐私保护都可独立开启，并分别选择任意已安装 App。"
-                        + " 系统应用默认隐藏；目标 App 仍需在 LSPosed 的 S Tool 作用域中勾选。"
-                        + " 设备标识、文件/相册和应用列表保护可能影响登录、分享或文件功能，建议按需开启。",
+                "六类通用隐私保护和通用开屏广告跳过都可分别选择任意已安装 App。"
+                        + " 系统应用默认隐藏；选择 App 后可直接发起 LSPosed 原生作用域请求。"
+                        + " 通用开屏跳过只点击已显示的高置信度按钮，不修改目标 App 的广告 SDK 或启动状态机。",
                 12,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
