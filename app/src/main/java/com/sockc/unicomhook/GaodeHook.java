@@ -24,6 +24,11 @@ public class GaodeHook implements HookModule {
     private static final String TARGET_PACKAGE = "com.autonavi.minimap";
     private static final int TAG_LISTENER_INSTALLED = 0x7F0B7001;
 
+    private static final Set<String> DIAGNOSTIC_SIGNATURES =
+            java.util.Collections.synchronizedSet(
+                    new HashSet<>()
+            );
+
     private static final Set<String> HOME_CARD_TEXTS =
             new HashSet<>(Arrays.asList(
                     "探索本地",
@@ -259,6 +264,11 @@ public class GaodeHook implements HookModule {
             Activity activity,
             View root
     ) {
+        diagnoseInterestingViews(
+                activity,
+                root
+        );
+
         if (adSkipEnabled) {
             scanAndClickSkip(root);
         }
@@ -365,6 +375,19 @@ public class GaodeHook implements HookModule {
                 );
 
         if (titleView == null) {
+            titleView =
+                    findFirstViewByIdentity(
+                            root,
+                            new String[]{
+                                    "explore_local",
+                                    "local_explore",
+                                    "home_explore",
+                                    "localexplore"
+                            }
+                    );
+        }
+
+        if (titleView == null) {
             return;
         }
 
@@ -400,6 +423,22 @@ public class GaodeHook implements HookModule {
                             root,
                             text
                     );
+
+            if (hit == null) {
+                String hint =
+                        "AI对话".equals(text)
+                                ? "ai"
+                                : "路线".equals(text)
+                                ? "route"
+                                : "explore";
+
+                hit =
+                        findBottomCandidate(
+                                activity,
+                                root,
+                                hint
+                        );
+            }
 
             if (hit == null) {
                 continue;
@@ -438,6 +477,20 @@ public class GaodeHook implements HookModule {
                         root,
                         FLOAT_BADGE_KEYWORDS
                 );
+
+        if (hit == null) {
+            hit =
+                    findRightCandidate(
+                            activity,
+                            root,
+                            new String[]{
+                                    "weekend",
+                                    "rank",
+                                    "street",
+                                    "badge"
+                            }
+                    );
+        }
 
         if (hit == null) {
             return;
@@ -559,6 +612,413 @@ public class GaodeHook implements HookModule {
         }
 
         return null;
+    }
+
+    private void diagnoseInterestingViews(
+            Activity activity,
+            View root
+    ) {
+        if (root == null) {
+            return;
+        }
+
+        diagnoseViewRecursive(
+                activity,
+                root,
+                0
+        );
+    }
+
+    private void diagnoseViewRecursive(
+            Activity activity,
+            View view,
+            int depth
+    ) {
+        if (view == null
+                || depth > 32) {
+            return;
+        }
+
+        String identity =
+                viewIdentity(
+                        view
+                );
+
+        String lower =
+                identity.toLowerCase(
+                        java.util.Locale.US
+                );
+
+        boolean interesting =
+                lower.contains(
+                        "探索"
+                )
+                        || lower.contains(
+                        "explore"
+                )
+                        || lower.contains(
+                        "ai对话"
+                )
+                        || lower.contains(
+                        "route"
+                )
+                        || lower.contains(
+                        "路线"
+                )
+                        || lower.contains(
+                        "扫街"
+                )
+                        || lower.contains(
+                        "weekend"
+                )
+                        || lower.contains(
+                        "订周末"
+                )
+                        || lower.contains(
+                        "rank"
+                )
+                        || lower.contains(
+                        "bottom"
+                )
+                        || lower.contains(
+                        "tab"
+                );
+
+        if (interesting) {
+            String signature =
+                    activity.getClass()
+                            .getName()
+                            + "|"
+                            + identity
+                            + "|"
+                            + parentChain(
+                            view
+                    );
+
+            if (DIAGNOSTIC_SIGNATURES.add(
+                    signature
+            )) {
+                XposedBridge.log(
+                        TAG
+                                + "R2 fingerprint activity="
+                                + activity.getClass()
+                                .getName()
+                                + " view="
+                                + identity
+                                + " parent="
+                                + parentChain(
+                                view
+                        )
+                );
+            }
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                diagnoseViewRecursive(
+                        activity,
+                        group.getChildAt(i),
+                        depth + 1
+                );
+            }
+        }
+    }
+
+    private View findFirstViewByIdentity(
+            View view,
+            String[] hints
+    ) {
+        if (view == null) {
+            return null;
+        }
+
+        String identity =
+                viewIdentity(
+                        view
+                ).toLowerCase(
+                        java.util.Locale.US
+                );
+
+        for (String hint : hints) {
+            if (identity.contains(
+                    hint.toLowerCase(
+                            java.util.Locale.US
+                    )
+            )) {
+                return view;
+            }
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                View found =
+                        findFirstViewByIdentity(
+                                group.getChildAt(i),
+                                hints
+                        );
+
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private View findBottomCandidate(
+            Activity activity,
+            View view,
+            String hint
+    ) {
+        if (view == null) {
+            return null;
+        }
+
+        int[] location =
+                new int[2];
+
+        view.getLocationOnScreen(
+                location
+        );
+
+        int screenHeight =
+                activity.getResources()
+                        .getDisplayMetrics()
+                        .heightPixels;
+
+        String identity =
+                viewIdentity(
+                        view
+                ).toLowerCase(
+                        java.util.Locale.US
+                );
+
+        boolean nearBottom =
+                location[1]
+                        > (int) (
+                        screenHeight * 0.72f
+                );
+
+        if (nearBottom
+                && identity.contains(
+                hint.toLowerCase(
+                        java.util.Locale.US
+                )
+        )) {
+            return view;
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                View found =
+                        findBottomCandidate(
+                                activity,
+                                group.getChildAt(i),
+                                hint
+                        );
+
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private View findRightCandidate(
+            Activity activity,
+            View view,
+            String[] hints
+    ) {
+        if (view == null) {
+            return null;
+        }
+
+        int[] location =
+                new int[2];
+
+        view.getLocationOnScreen(
+                location
+        );
+
+        int screenWidth =
+                activity.getResources()
+                        .getDisplayMetrics()
+                        .widthPixels;
+
+        String identity =
+                viewIdentity(
+                        view
+                ).toLowerCase(
+                        java.util.Locale.US
+                );
+
+        boolean atRight =
+                location[0]
+                        > (int) (
+                        screenWidth * 0.60f
+                );
+
+        if (atRight) {
+            for (String hint : hints) {
+                if (identity.contains(
+                        hint.toLowerCase(
+                                java.util.Locale.US
+                        )
+                )) {
+                    return view;
+                }
+            }
+        }
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group =
+                    (ViewGroup) view;
+
+            for (int i = 0;
+                    i < group.getChildCount();
+                    i++) {
+                View found =
+                        findRightCandidate(
+                                activity,
+                                group.getChildAt(i),
+                                hints
+                        );
+
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private String viewIdentity(
+            View view
+    ) {
+        StringBuilder builder =
+                new StringBuilder();
+
+        builder.append(
+                view.getClass()
+                        .getName()
+        );
+
+        String resourceName =
+                resourceName(
+                        view
+                );
+
+        if (resourceName != null) {
+            builder.append(
+                    "#"
+            ).append(
+                    resourceName
+            );
+        }
+
+        String text =
+                viewText(
+                        view
+                );
+
+        if (text != null) {
+            builder.append(
+                    "["
+            ).append(
+                    text
+            ).append(
+                    "]"
+            );
+        }
+
+        return builder.toString();
+    }
+
+    private String resourceName(
+            View view
+    ) {
+        if (view == null
+                || view.getId()
+                == View.NO_ID) {
+            return null;
+        }
+
+        try {
+            return view.getResources()
+                    .getResourceName(
+                            view.getId()
+                    );
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private String parentChain(
+            View start
+    ) {
+        StringBuilder builder =
+                new StringBuilder();
+
+        View current =
+                start;
+
+        for (int i = 0;
+                i < 6
+                        && current != null;
+                i++) {
+            if (builder.length() > 0) {
+                builder.append(
+                        " <- "
+                );
+            }
+
+            builder.append(
+                    current.getClass()
+                            .getName()
+            );
+
+            String resource =
+                    resourceName(
+                            current
+                    );
+
+            if (resource != null) {
+                builder.append(
+                        "#"
+                ).append(
+                        resource
+                );
+            }
+
+            ViewParent parent =
+                    current.getParent();
+
+            current =
+                    parent instanceof View
+                            ? (View) parent
+                            : null;
+        }
+
+        return builder.toString();
     }
 
     private String viewText(View view) {
