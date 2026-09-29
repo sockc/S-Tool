@@ -50,6 +50,11 @@
             android:exported="true"
             android:grantUriPermissions="false" />
 
+        <provider
+            android:name="io.github.libxposed.service.XposedProvider"
+            android:authorities="${applicationId}.XposedService"
+            android:exported="true" />
+
         <meta-data
             android:name="xposedmodule"
             android:value="true" />
