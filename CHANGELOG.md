@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.4.3
+
+### Gaode R3
+- Replace text-only cleaning as the primary strategy with semantic Gaode business hooks.
+- Force `BootBizDataPreloaderImpl.canShowSplash()` to false so Gaode follows its own no-splash path.
+- Suppress realtime splash fetch, splash mask display, banner management/parsing, background operation messages, splash linkage data and search splash template sources.
+- Add AJX text-anchor handling for Explore Local and operation badges.
+- Discover and hook the actual AJX list adapter `onBindViewHolder` after a target item is observed, so future bound items are handled at item level rather than by whole-page polling.
+- Add structural bottom-tab row recognition and equal-width redistribution after hiding Explore / AI Chat / Route.
+- Keep V1.4.2 R2 fingerprints and text scanning as compatibility fallbacks.
+
+### Compatibility
+- Designed around publicly documented and independently reimplemented hook points verified for Gaode 16.23 / 17.00.
+- No source files from MapAdKiller are vendored into S Tool.
+
+### Version
+- Bump app version to `1.4.3` / versionCode `143`.
+
 ## 1.4.2
 
 ### OTP auto-copy V2
