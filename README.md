@@ -2,9 +2,9 @@
 
 S Tool 是一个基于 Xposed / LSPosed 的 Android 功能增强与隐私工具集合。
 
-## V1.3 通用隐私引擎
+## V1.3.1 注入入口修复与诊断
 
-V1.3.0 开始把可复用的隐私能力从单个 App Hook 中抽离出来。
+V1.3.1 修复目标 App 进程中过早读取配置的入口设计，并加入真实 LSPosed 注入状态回报。V1.3 的通用隐私引擎继续保留。
 
 ### 通用定位保护
 
@@ -35,9 +35,13 @@ V1.3.0 开始把可复用的隐私能力从单个 App Hook 中抽离出来。
 
 “恢复默认”会恢复每个功能自己的默认状态，而不是简单把所有开关全部打开。通用隐私保护默认关闭，现有应用增强默认保持开启。
 
-## 配置桥
+## 注入与配置桥
 
-功能开关使用 V1.2.2 引入的只读 `ConfigProvider` 作为主跨进程配置通道。模块 UI 将设置保存在自己的私有 SharedPreferences，目标 App Hook 通过 Binder 读取配置。legacy `XSharedPreferences` 继续作为兼容兜底。
+`SMainHook.handleLoadPackage()` 现在只建立 `Application.attach(Context)` 入口；等目标 App 获得自己的真实 Context 后，再读取配置并安装具体 Hook。这样避免在 Application 尚未 attach 时通过 system context 读取跨进程配置。
+
+每个目标 App 成功进入 `Application.attach` 后，会向 S Tool 的 ConfigProvider 回报一次注入时间。管理页会显示“真实注入”数量，并在已安装目标旁显示“已注入 HH:mm”或“未检测到注入”。
+
+功能开关继续使用只读 `ConfigProvider` 作为主跨进程配置通道；legacy `XSharedPreferences` 作为兼容兜底。
 
 ## 构建
 
@@ -74,4 +78,4 @@ GitHub Debug/Release 稳定签名使用以下 Repository Secrets：
 
 ## 版本
 
-当前开发版本：V1.3.0
+当前开发版本：V1.3.1
