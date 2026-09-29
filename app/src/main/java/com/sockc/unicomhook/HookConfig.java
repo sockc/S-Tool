@@ -1,10 +1,8 @@
 package com.sockc.unicomhook;
 
-import android.app.Application;
 import android.content.Context;
 import android.os.Bundle;
 
-import de.robv.android.xposed.AndroidAppHelper;
 import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -130,17 +128,6 @@ final class HookConfig {
     }
 
     private static Context findEarlyContext() {
-        try {
-            Application application =
-                    AndroidAppHelper
-                            .currentApplication();
-
-            if (application != null) {
-                return application;
-            }
-        } catch (Throwable ignored) {
-        }
-
         try {
             Class<?> activityThreadClass =
                     XposedHelpers.findClass(
