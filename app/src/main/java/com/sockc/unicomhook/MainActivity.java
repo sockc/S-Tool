@@ -626,9 +626,11 @@ public final class MainActivity extends Activity {
             updateChildSwitchStates(
                     feature
             );
+            updateUniversalAppSwitchStates();
             updateSubSummary(
                     feature
             );
+            updateUniversalAppSummary();
         }
 
         return card;
@@ -1124,7 +1126,11 @@ public final class MainActivity extends Activity {
             FeatureRegistry.Feature feature
     ) {
         if (feature.packages.isEmpty()) {
-            return "作用范围：当前 LSPosed Scope";
+            return FeatureRegistry.UNIVERSAL_PRIVACY.equals(
+                    feature.id
+            )
+                    ? "作用范围：下方已选择 App"
+                    : "作用范围：当前 LSPosed Scope";
         }
 
         StringBuilder builder =
@@ -1178,6 +1184,35 @@ public final class MainActivity extends Activity {
                 builder.append(
                         " · 尚无注入记录"
                 );
+            }
+
+            long failureAt =
+                    HookStatus.getFailureAt(
+                            this,
+                            packageName,
+                            feature.id
+                    );
+
+            if (failureAt > 0L) {
+                String failureSummary =
+                        HookStatus.getFailureSummary(
+                                this,
+                                packageName,
+                                feature.id
+                        );
+
+                builder.append(
+                        " · ⚠ Hook失败"
+                );
+
+                if (failureSummary != null
+                        && !failureSummary.trim().isEmpty()) {
+                    builder.append(
+                            "："
+                    ).append(
+                            failureSummary
+                    );
+                }
             }
         }
 
