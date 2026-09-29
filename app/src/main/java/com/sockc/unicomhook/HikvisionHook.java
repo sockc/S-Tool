@@ -5,13 +5,11 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XposedBridge;
+import com.sockc.unicomhook.compat.XposedHelpers;
 
-public class HikvisionHook implements IXposedHookLoadPackage {
+public class HikvisionHook implements HookModule {
     private static final String TAG = "Sockc_Hik: ";
     // 注意：海康有多个版本，常见的是 Hik-Connect
     private static final String TARGET_PACKAGE = "com.hikvision.hikconnect"; 

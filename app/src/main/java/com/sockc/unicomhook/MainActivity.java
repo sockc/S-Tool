@@ -9,6 +9,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -56,6 +57,7 @@ public final class MainActivity extends Activity {
     private TextView injectionSummary;
     private TextView changedSummary;
     private TextView universalAppSummary;
+    private TextView smsNotificationStatus;
 
     private final Map<String, TextView> universalMenuStatusViews =
             new LinkedHashMap<>();
@@ -90,6 +92,8 @@ public final class MainActivity extends Activity {
                         View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
                 );
 
+        ScopeServiceBridge.initialize();
+
         FeaturePrefs.OpenResult openResult =
                 FeaturePrefs.open(this);
 
@@ -106,9 +110,12 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
 
+        ScopeServiceBridge.refreshScope();
+
         if (configStatus != null) {
             refreshSummary();
             refreshUniversalMenuStatuses();
+            refreshSmsNotificationStatus();
         }
     }
 
@@ -146,7 +153,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.4.0 · 通用隐私第二阶段",
+                "V1.4.2 · 验证码 V2 · 高德/游戏助手 R2",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -655,6 +662,12 @@ public final class MainActivity extends Activity {
                 target
         );
 
+        target.setOnClickListener(
+                view -> requestFeatureScope(
+                        feature
+                )
+        );
+
         firstRow.addView(
                 nameColumn,
                 new LinearLayout.LayoutParams(
@@ -715,6 +728,38 @@ public final class MainActivity extends Activity {
                 summary,
                 topMargin(dp(10))
         );
+
+        if ("sms_code".equals(
+                feature.id
+        )) {
+            smsNotificationStatus = text(
+                    "",
+                    12,
+                    COLOR_SUBTEXT,
+                    Typeface.BOLD
+            );
+
+            card.addView(
+                    smsNotificationStatus,
+                    topMargin(dp(10))
+            );
+
+            Button notificationAccess =
+                    actionButton(
+                            "通知读取权限"
+                    );
+
+            notificationAccess.setOnClickListener(
+                    view -> openNotificationListenerSettings()
+            );
+
+            card.addView(
+                    notificationAccess,
+                    topMargin(dp(6))
+            );
+
+            refreshSmsNotificationStatus();
+        }
 
         if (!feature.subFeatures.isEmpty()) {
             LinearLayout childContainer =
@@ -1361,6 +1406,20 @@ public final class MainActivity extends Activity {
                     "已安装 "
             ).append(version);
 
+            if (ScopeServiceBridge.isConnected()) {
+                builder.append(
+                        ScopeServiceBridge.isInScope(
+                                packageName
+                        )
+                                ? " · Scope ✓"
+                                : " · 待 Scope（点此申请）"
+                );
+            } else {
+                builder.append(
+                        " · Scope 服务未连接"
+                );
+            }
+
             long injectedAt =
                     InjectionStatus
                             .getLastInjectedAt(
@@ -1436,6 +1495,109 @@ public final class MainActivity extends Activity {
         }
 
         return builder.toString();
+    }
+
+    private void requestFeatureScope(
+            FeatureRegistry.Feature feature
+    ) {
+        if (feature == null
+                || feature.packages.isEmpty()) {
+            return;
+        }
+
+        java.util.ArrayList<String> missing =
+                new java.util.ArrayList<>();
+
+        for (String packageName
+                : feature.packages) {
+            if (getVersion(packageName) == null
+                    || ScopeServiceBridge.isInScope(
+                    packageName
+            )) {
+                continue;
+            }
+
+            missing.add(
+                    packageName
+            );
+        }
+
+        if (missing.isEmpty()) {
+            Toast.makeText(
+                    this,
+                    "已在 LSPosed Scope",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        ScopeServiceBridge.requestScopes(
+                missing,
+                (packageName, state, message) ->
+                        runOnUiThread(
+                                () -> {
+                                    refreshSummary();
+
+                                    if (state
+                                            == ScopeServiceBridge.RequestState.APPROVED) {
+                                        Toast.makeText(
+                                                this,
+                                                "Scope 已批准："
+                                                        + packageName,
+                                                Toast.LENGTH_SHORT
+                                        ).show();
+                                    } else if (state
+                                            == ScopeServiceBridge.RequestState.FAILED) {
+                                        Toast.makeText(
+                                                this,
+                                                message == null
+                                                        ? "Scope 请求失败"
+                                                        : message,
+                                                Toast.LENGTH_SHORT
+                                        ).show();
+                                    }
+                                }
+                        )
+        );
+    }
+
+    private void openNotificationListenerSettings() {
+        try {
+            startActivity(
+                    new Intent(
+                            Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
+                    )
+            );
+        } catch (Throwable throwable) {
+            startActivity(
+                    new Intent(
+                            Settings.ACTION_SETTINGS
+                    )
+            );
+        }
+    }
+
+    private void refreshSmsNotificationStatus() {
+        if (smsNotificationStatus == null) {
+            return;
+        }
+
+        boolean enabled =
+                OtpNotificationAccess.isEnabled(
+                        this
+                );
+
+        smsNotificationStatus.setText(
+                enabled
+                        ? "验证码 V2：✓ 通知监听已授权 · Google 信息 Hook 作为备用"
+                        : "验证码 V2：⚠ 通知监听未授权 · 当前只剩 Google 信息备用通道"
+        );
+
+        smsNotificationStatus.setTextColor(
+                enabled
+                        ? COLOR_OK
+                        : COLOR_WARN
+        );
     }
 
     private String getVersion(

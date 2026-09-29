@@ -1,8 +1,6 @@
 package com.sockc.unicomhook;
 
 import android.app.Activity;
-import android.app.Application;
-import android.content.Context;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
@@ -16,11 +14,9 @@ import java.lang.ref.WeakReference;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
 
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XposedBridge;
+import com.sockc.unicomhook.compat.XposedHelpers;
 
 /**
  * Airvoy 激励广告正常完成后自动关闭广告页面。
@@ -30,7 +26,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * 2. 不伪造 RewardItem 或奖励回调；
  * 3. 只在真实 onUserEarnedReward 回调出现后尝试关闭。
  */
-public final class AirvoyHook implements IXposedHookLoadPackage {
+public final class AirvoyHook implements HookModule {
 
     private static final String TARGET_PACKAGE = "com.airvoy.airvoy";
     private static final String TAG = "Sockc_Airvoy: ";
@@ -44,15 +40,13 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
     private static final AtomicLong CLOSE_SESSION_ID =
             new AtomicLong(0L);
 
-    private static boolean lifecycleRegistered = false;
-
     /**
      * 必须是非 static 的 Xposed 入口方法。
      * 类也必须实现 IXposedHookLoadPackage。
      */
     @Override
     public void handleLoadPackage(
-            XC_LoadPackage.LoadPackageParam lpparam
+            LoadPackageParam lpparam
     ) {
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) {
             return;
@@ -61,102 +55,85 @@ public final class AirvoyHook implements IXposedHookLoadPackage {
         log("模块已加载，package=" + lpparam.packageName
                 + ", process=" + lpparam.processName);
 
-        hookApplicationLifecycle();
+        hookActivityTracking();
         hookRewardCallbacks(lpparam.classLoader);
     }
 
     /**
-     * 保存当前前台 Activity。
+     * 直接跟踪目标包 Activity，不再在已经执行中的 Application.attach
+     * 里面二次安装 attach Hook。
      */
-    private static void hookApplicationLifecycle() {
+    private static void hookActivityTracking() {
         try {
             XposedHelpers.findAndHookMethod(
-                    Application.class,
-                    "attach",
-                    Context.class,
+                    Activity.class,
+                    "onResume",
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(
                                 MethodHookParam param
                         ) {
-                            Application application =
-                                    (Application) param.thisObject;
+                            Activity activity =
+                                    (Activity) param.thisObject;
 
-                            synchronized (AirvoyHook.class) {
-                                if (lifecycleRegistered) {
-                                    return;
-                                }
-                                lifecycleRegistered = true;
+                            if (!TARGET_PACKAGE.equals(
+                                    activity.getPackageName()
+                            )) {
+                                return;
                             }
 
-                            application.registerActivityLifecycleCallbacks(
-                                    new Application.ActivityLifecycleCallbacks() {
-                                        @Override
-                                        public void onActivityCreated(
-                                                Activity activity,
-                                                Bundle savedInstanceState
-                                        ) {
-                                            log("Activity created: "
-                                                    + activity.getClass().getName());
-                                        }
+                            currentActivity =
+                                    new WeakReference<>(
+                                            activity
+                                    );
 
-                                        @Override
-                                        public void onActivityStarted(
-                                                Activity activity
-                                        ) {
-                                        }
-
-                                        @Override
-                                        public void onActivityResumed(
-                                                Activity activity
-                                        ) {
-                                            currentActivity =
-                                                    new WeakReference<>(activity);
-
-                                            log("Activity resumed: "
-                                                    + activity.getClass().getName());
-                                        }
-
-                                        @Override
-                                        public void onActivityPaused(
-                                                Activity activity
-                                        ) {
-                                        }
-
-                                        @Override
-                                        public void onActivityStopped(
-                                                Activity activity
-                                        ) {
-                                        }
-
-                                        @Override
-                                        public void onActivitySaveInstanceState(
-                                                Activity activity,
-                                                Bundle outState
-                                        ) {
-                                        }
-
-                                        @Override
-                                        public void onActivityDestroyed(
-                                                Activity activity
-                                        ) {
-                                            Activity current =
-                                                    currentActivity.get();
-
-                                            if (current == activity) {
-                                                currentActivity =
-                                                        new WeakReference<>(null);
-                                            }
-                                        }
-                                    }
+                            log(
+                                    "Activity resumed: "
+                                            + activity.getClass()
+                                            .getName()
                             );
-
-                            log("Activity 生命周期监听已注册");
                         }
                     }
             );
+
+            XposedHelpers.findAndHookMethod(
+                    Activity.class,
+                    "onDestroy",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(
+                                MethodHookParam param
+                        ) {
+                            Activity activity =
+                                    (Activity) param.thisObject;
+
+                            if (!TARGET_PACKAGE.equals(
+                                    activity.getPackageName()
+                            )) {
+                                return;
+                            }
+
+                            Activity current =
+                                    currentActivity.get();
+
+                            if (current == activity) {
+                                currentActivity =
+                                        new WeakReference<>(
+                                                null
+                                        );
+                            }
+                        }
+                    }
+            );
+
+            log(
+                    "Activity 跟踪 Hook 已安装"
+            );
         } catch (Throwable throwable) {
-            log("注册 Activity 生命周期监听失败: " + throwable);
+            log(
+                    "Activity 跟踪 Hook 失败: "
+                            + throwable
+            );
         }
     }
 

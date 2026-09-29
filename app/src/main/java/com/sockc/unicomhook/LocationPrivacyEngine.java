@@ -2,8 +2,8 @@ package com.sockc.unicomhook;
 
 import android.location.LocationManager;
 
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XposedBridge;
 
 final class LocationPrivacyEngine {
 

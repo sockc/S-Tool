@@ -8,6 +8,8 @@
         <package android:name="com.ganji.android.haoche" />
         <package android:name="com.hikvision.hikconnect" />
         <package android:name="com.oplus.games" />
+        <package android:name="com.coloros.gamespaceui" />
+        <package android:name="com.coloros.gamespace" />
         <package android:name="com.tencent.mobileqq" />
         <package android:name="com.taobao.idlefish" />
         <package android:name="com.tencent.android.qqdownloader" />
@@ -43,12 +45,27 @@
             </intent-filter>
         </activity>
 
+        <service
+            android:name=".OtpNotificationListenerService"
+            android:label="S Tool 验证码监听"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name=".ConfigProvider"
             android:authorities="com.sockc.unicomhook.config"
             android:enabled="true"
             android:exported="true"
             android:grantUriPermissions="false" />
+
+        <provider
+            android:name="io.github.libxposed.service.XposedProvider"
+            android:authorities="${applicationId}.XposedService"
+            android:exported="true" />
 
         <meta-data
             android:name="xposedmodule"

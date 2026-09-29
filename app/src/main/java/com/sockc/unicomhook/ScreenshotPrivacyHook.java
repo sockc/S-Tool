@@ -1,11 +1,9 @@
 package com.sockc.unicomhook;
 
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+import com.sockc.unicomhook.compat.XposedBridge;
 
 public class ScreenshotPrivacyHook
-        implements IXposedHookLoadPackage {
+        implements HookModule {
 
     private static final String TAG =
             "Sockc_Screenshot: ";

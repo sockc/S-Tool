@@ -3,8 +3,8 @@ package com.sockc.unicomhook;
 import java.io.File;
 import java.util.Locale;
 
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
+import com.sockc.unicomhook.compat.XC_MethodHook;
+import com.sockc.unicomhook.compat.XposedBridge;
 
 final class FileMediaPrivacyEngine {
 
