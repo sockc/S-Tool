@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.1
+
+### Sub-feature controls
+- Add expandable child controls under selected app modules.
+- China Unicom: cold-start ad, warm-start ad, permission privacy, location privacy, screenshot privacy.
+- Amap/Gaode: ad skip, Explore Local section, bottom tabs, floating campaign badges.
+- Taobao: cold-start ad and warm-start ad controls.
+- Meituan: file privacy, splash ad, permission privacy, device identifier privacy.
+- Pinduoduo: file privacy, permission privacy, splash ad.
+- Parent switches disable the whole module while preserving child preference states.
+- Move the legacy standalone Unicom screenshot privacy switch under China Unicom and migrate its saved value.
+
+### Stability
+- Bound Taobao, Meituan and Pinduoduo temporary UI scanners with 5-second cleanup timeouts.
+- Do not register disabled child hooks in target app processes.
+
+### Version
+- Bump app version to `1.2.1` / versionCode `121`.
+
 ## 1.2.0
 
 ### Management
