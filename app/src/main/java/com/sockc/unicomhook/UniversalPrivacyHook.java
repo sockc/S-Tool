@@ -27,15 +27,15 @@ public final class UniversalPrivacyHook
                 HookConfig.load();
 
         boolean locationEnabled =
-                config.isEnabled(
-                        "universal_privacy",
-                        "universal_privacy.location"
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_LOCATION,
+                        lpparam.packageName
                 );
 
         boolean screenshotEnabled =
-                config.isEnabled(
-                        "universal_privacy",
-                        "universal_privacy.screenshot"
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_SCREENSHOT,
+                        lpparam.packageName
                 );
 
         if (!locationEnabled
