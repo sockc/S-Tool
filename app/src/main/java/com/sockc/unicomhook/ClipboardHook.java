@@ -1,12 +1,10 @@
 package com.sockc.unicomhook;
 
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodReplacement;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+import com.sockc.unicomhook.compat.XC_MethodReplacement;
+import com.sockc.unicomhook.compat.XposedBridge;
+import com.sockc.unicomhook.compat.XposedHelpers;
 
-public class ClipboardHook implements IXposedHookLoadPackage {
+public class ClipboardHook implements HookModule {
     private static final String TAG = "Sockc_Clipboard: ";
 
     @Override
