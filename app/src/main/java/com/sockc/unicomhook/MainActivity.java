@@ -12,7 +12,6 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -21,19 +20,30 @@ import android.widget.Toast;
 
 import java.text.DateFormat;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public final class MainActivity extends Activity {
 
-    private static final int COLOR_BG = Color.rgb(246, 247, 249);
-    private static final int COLOR_CARD = Color.WHITE;
-    private static final int COLOR_TEXT = Color.rgb(28, 30, 34);
-    private static final int COLOR_SUBTEXT = Color.rgb(103, 109, 120);
-    private static final int COLOR_ACCENT = Color.rgb(30, 112, 255);
-    private static final int COLOR_OK = Color.rgb(26, 143, 86);
-    private static final int COLOR_WARN = Color.rgb(197, 119, 0);
+    private static final int COLOR_BG =
+            Color.rgb(246, 247, 249);
+    private static final int COLOR_CARD =
+            Color.WHITE;
+    private static final int COLOR_TEXT =
+            Color.rgb(28, 30, 34);
+    private static final int COLOR_SUBTEXT =
+            Color.rgb(103, 109, 120);
+    private static final int COLOR_ACCENT =
+            Color.rgb(30, 112, 255);
+    private static final int COLOR_OK =
+            Color.rgb(26, 143, 86);
+    private static final int COLOR_WARN =
+            Color.rgb(197, 119, 0);
+    private static final int COLOR_SUBCARD =
+            Color.rgb(248, 249, 251);
 
     private SharedPreferences preferences;
     private boolean crossProcessAvailable;
@@ -47,19 +57,35 @@ public final class MainActivity extends Activity {
     private final Map<String, Switch> switches =
             new LinkedHashMap<>();
 
+    private final Map<String, TextView> subSummaryViews =
+            new LinkedHashMap<>();
+
+    private final Map<String, LinearLayout> subContainers =
+            new LinkedHashMap<>();
+
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(
+            Bundle savedInstanceState
+    ) {
         super.onCreate(savedInstanceState);
 
-        getWindow().setStatusBarColor(Color.WHITE);
-        getWindow().setNavigationBarColor(COLOR_BG);
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        getWindow().setStatusBarColor(
+                Color.WHITE
         );
+        getWindow().setNavigationBarColor(
+                COLOR_BG
+        );
+        getWindow()
+                .getDecorView()
+                .setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                );
 
         FeaturePrefs.OpenResult openResult =
                 FeaturePrefs.open(this);
-        preferences = openResult.preferences;
+
+        preferences =
+                openResult.preferences;
         crossProcessAvailable =
                 openResult.crossProcessAvailable;
 
@@ -68,12 +94,22 @@ public final class MainActivity extends Activity {
     }
 
     private View buildContent() {
-        ScrollView scrollView = new ScrollView(this);
+        ScrollView scrollView =
+                new ScrollView(this);
+
         scrollView.setFillViewport(true);
-        scrollView.setBackgroundColor(COLOR_BG);
+        scrollView.setBackgroundColor(
+                COLOR_BG
+        );
 
         LinearLayout root = vertical();
-        root.setPadding(dp(18), dp(20), dp(18), dp(32));
+        root.setPadding(
+                dp(18),
+                dp(20),
+                dp(18),
+                dp(32)
+        );
+
         scrollView.addView(
                 root,
                 new ScrollView.LayoutParams(
@@ -91,15 +127,19 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.2.0 · LSPosed 模块管理",
+                "V1.2.1 · 模块与子功能管理",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
         );
+
         LinearLayout.LayoutParams subtitleParams =
                 wrapMatch();
         subtitleParams.topMargin = dp(2);
-        root.addView(subtitle, subtitleParams);
+        root.addView(
+                subtitle,
+                subtitleParams
+        );
 
         root.addView(
                 buildStatusCard(),
@@ -110,6 +150,7 @@ public final class MainActivity extends Activity {
                 sectionTitle("快速操作"),
                 topMargin(dp(22))
         );
+
         root.addView(
                 buildQuickActions(),
                 topMargin(dp(10))
@@ -129,17 +170,27 @@ public final class MainActivity extends Activity {
         }
 
         TextView footer = text(
-                "修改开关后，请强制停止并重新打开对应目标 App。"
-                        + " 未读取到配置时，为避免影响现有功能，Hook 默认保持开启。",
+                "总开关关闭时会停止整个模块，子功能的原设置会保留。"
+                        + " 修改开关后，请强制停止并重新打开对应目标 App。"
+                        + " Hook 读取不到配置时仍默认开启，避免升级后功能意外失效。",
                 12,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
         );
-        footer.setLineSpacing(0, 1.15f);
+
+        footer.setLineSpacing(
+                0,
+                1.18f
+        );
+
         LinearLayout.LayoutParams footerParams =
                 topMargin(dp(20));
         footerParams.bottomMargin = dp(12);
-        root.addView(footer, footerParams);
+
+        root.addView(
+                footer,
+                footerParams
+        );
 
         return scrollView;
     }
@@ -202,12 +253,17 @@ public final class MainActivity extends Activity {
         if (!crossProcessAvailable) {
             TextView warning = text(
                     "当前只能写入本机私有配置。请先在 LSPosed 中启用 S Tool，"
-                            + "然后重新打开本应用，功能开关才会真正作用于 Hook。",
+                            + "然后重新打开 S Tool，开关才会真正作用于目标 App。",
                     13,
                     COLOR_WARN,
                     Typeface.BOLD
             );
-            warning.setLineSpacing(0, 1.15f);
+
+            warning.setLineSpacing(
+                    0,
+                    1.15f
+            );
+
             card.addView(
                     warning,
                     topMargin(dp(12))
@@ -218,38 +274,64 @@ public final class MainActivity extends Activity {
     }
 
     private View buildQuickActions() {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout row =
+                new LinearLayout(this);
 
-        Button enableAll = actionButton("全部开启");
-        Button disableAll = actionButton("全部关闭");
-        Button reset = actionButton("恢复默认");
+        row.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
 
-        enableAll.setEnabled(crossProcessAvailable);
-        disableAll.setEnabled(crossProcessAvailable);
-        reset.setEnabled(crossProcessAvailable);
+        Button enableAll =
+                actionButton("全部开启");
+        Button disableAll =
+                actionButton("全部关闭");
+        Button reset =
+                actionButton("恢复默认");
+
+        enableAll.setEnabled(
+                crossProcessAvailable
+        );
+        disableAll.setEnabled(
+                crossProcessAvailable
+        );
+        reset.setEnabled(
+                crossProcessAvailable
+        );
 
         enableAll.setOnClickListener(
                 view -> setAllFeatures(true)
         );
+
         disableAll.setOnClickListener(
                 view -> setAllFeatures(false)
         );
+
         reset.setOnClickListener(
                 view -> resetDefaults()
         );
 
         row.addView(
                 enableAll,
-                weightedButtonParams(1f, 0)
+                weightedButtonParams(
+                        1f,
+                        0
+                )
         );
+
         row.addView(
                 disableAll,
-                weightedButtonParams(1f, dp(8))
+                weightedButtonParams(
+                        1f,
+                        dp(8)
+                )
         );
+
         row.addView(
                 reset,
-                weightedButtonParams(1f, dp(8))
+                weightedButtonParams(
+                        1f,
+                        dp(8)
+                )
         );
 
         return row;
@@ -260,9 +342,15 @@ public final class MainActivity extends Activity {
     ) {
         LinearLayout card = card();
 
-        LinearLayout firstRow = new LinearLayout(this);
-        firstRow.setOrientation(LinearLayout.HORIZONTAL);
-        firstRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout firstRow =
+                new LinearLayout(this);
+
+        firstRow.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
+        firstRow.setGravity(
+                Gravity.CENTER_VERTICAL
+        );
 
         LinearLayout nameColumn = vertical();
 
@@ -280,6 +368,7 @@ public final class MainActivity extends Activity {
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
         );
+
         nameColumn.addView(
                 target,
                 topMargin(dp(3))
@@ -294,42 +383,37 @@ public final class MainActivity extends Activity {
                 )
         );
 
-        Switch toggle = new Switch(this);
-        toggle.setChecked(
-                FeaturePrefs.isEnabled(
-                        preferences,
-                        feature.id
-                )
-        );
-        toggle.setEnabled(crossProcessAvailable);
-        switches.put(feature.id, toggle);
+        Switch masterSwitch =
+                createSwitch(
+                        feature.id,
+                        FeaturePrefs.isEnabled(
+                                preferences,
+                                feature.id
+                        )
+                );
 
-        toggle.setOnCheckedChangeListener(
+        masterSwitch.setOnCheckedChangeListener(
                 (buttonView, isChecked) -> {
                     if (updatingSwitches) {
                         return;
                     }
 
-                    boolean saved =
-                            FeaturePrefs.setEnabled(
-                                    preferences,
-                                    feature.id,
-                                    isChecked
-                            );
+                    saveSwitch(
+                            feature.id,
+                            isChecked
+                    );
 
-                    if (!saved) {
-                        Toast.makeText(
-                                this,
-                                "保存失败",
-                                Toast.LENGTH_SHORT
-                        ).show();
-                    }
-
+                    updateChildSwitchStates(
+                            feature
+                    );
+                    updateSubSummary(
+                            feature
+                    );
                     refreshSummary();
                 }
         );
 
-        firstRow.addView(toggle);
+        firstRow.addView(masterSwitch);
         card.addView(firstRow);
 
         TextView summary = text(
@@ -338,13 +422,338 @@ public final class MainActivity extends Activity {
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
         );
-        summary.setLineSpacing(0, 1.12f);
+
+        summary.setLineSpacing(
+                0,
+                1.12f
+        );
+
         card.addView(
                 summary,
                 topMargin(dp(10))
         );
 
+        if (!feature.subFeatures.isEmpty()) {
+            LinearLayout childContainer =
+                    vertical();
+
+            childContainer.setVisibility(
+                    View.GONE
+            );
+
+            TextView subSummary = text(
+                    "",
+                    13,
+                    COLOR_ACCENT,
+                    Typeface.BOLD
+            );
+
+            subSummary.setPadding(
+                    0,
+                    dp(4),
+                    0,
+                    dp(2)
+            );
+
+            subContainers.put(
+                    feature.id,
+                    childContainer
+            );
+            subSummaryViews.put(
+                    feature.id,
+                    subSummary
+            );
+
+            subSummary.setOnClickListener(
+                    view -> {
+                        boolean expand =
+                                childContainer
+                                        .getVisibility()
+                                        != View.VISIBLE;
+
+                        childContainer.setVisibility(
+                                expand
+                                        ? View.VISIBLE
+                                        : View.GONE
+                        );
+
+                        updateSubSummary(
+                                feature
+                        );
+                    }
+            );
+
+            card.addView(
+                    subSummary,
+                    topMargin(dp(12))
+            );
+
+            for (FeatureRegistry.SubFeature subFeature
+                    : feature.subFeatures) {
+                childContainer.addView(
+                        buildSubFeatureRow(
+                                feature,
+                                subFeature
+                        ),
+                        topMargin(dp(8))
+                );
+            }
+
+            card.addView(
+                    childContainer,
+                    topMargin(dp(2))
+            );
+
+            updateChildSwitchStates(
+                    feature
+            );
+            updateSubSummary(
+                    feature
+            );
+        }
+
         return card;
+    }
+
+    private View buildSubFeatureRow(
+            FeatureRegistry.Feature feature,
+            FeatureRegistry.SubFeature subFeature
+    ) {
+        LinearLayout row =
+                new LinearLayout(this);
+
+        row.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
+        row.setGravity(
+                Gravity.CENTER_VERTICAL
+        );
+        row.setPadding(
+                dp(12),
+                dp(10),
+                dp(10),
+                dp(10)
+        );
+
+        GradientDrawable background =
+                new GradientDrawable();
+        background.setColor(
+                COLOR_SUBCARD
+        );
+        background.setCornerRadius(
+                dp(11)
+        );
+        row.setBackground(background);
+
+        LinearLayout copy = vertical();
+
+        TextView title = text(
+                subFeature.title,
+                14,
+                COLOR_TEXT,
+                Typeface.BOLD
+        );
+        copy.addView(title);
+
+        TextView summary = text(
+                subFeature.summary,
+                12,
+                COLOR_SUBTEXT,
+                Typeface.NORMAL
+        );
+
+        summary.setLineSpacing(
+                0,
+                1.10f
+        );
+
+        copy.addView(
+                summary,
+                topMargin(dp(3))
+        );
+
+        row.addView(
+                copy,
+                new LinearLayout.LayoutParams(
+                        0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        1f
+                )
+        );
+
+        Switch childSwitch =
+                createSwitch(
+                        subFeature.id,
+                        FeaturePrefs.isEnabled(
+                                preferences,
+                                subFeature.id
+                        )
+                );
+
+        childSwitch.setEnabled(
+                crossProcessAvailable
+                        && FeaturePrefs.isEnabled(
+                        preferences,
+                        feature.id
+                )
+        );
+
+        childSwitch.setOnCheckedChangeListener(
+                (buttonView, isChecked) -> {
+                    if (updatingSwitches) {
+                        return;
+                    }
+
+                    saveSwitch(
+                            subFeature.id,
+                            isChecked
+                    );
+
+                    updateSubSummary(
+                            feature
+                    );
+                    refreshSummary();
+                }
+        );
+
+        row.addView(childSwitch);
+
+        return row;
+    }
+
+    private Switch createSwitch(
+            String key,
+            boolean checked
+    ) {
+        Switch toggle =
+                new Switch(this);
+
+        toggle.setChecked(checked);
+        toggle.setEnabled(
+                crossProcessAvailable
+        );
+
+        switches.put(
+                key,
+                toggle
+        );
+
+        return toggle;
+    }
+
+    private void saveSwitch(
+            String key,
+            boolean enabled
+    ) {
+        boolean saved =
+                FeaturePrefs.setEnabled(
+                        preferences,
+                        key,
+                        enabled
+                );
+
+        if (!saved) {
+            Toast.makeText(
+                    this,
+                    "保存失败",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
+    }
+
+    private void updateChildSwitchStates(
+            FeatureRegistry.Feature feature
+    ) {
+        boolean masterEnabled =
+                crossProcessAvailable
+                        && FeaturePrefs.isEnabled(
+                        preferences,
+                        feature.id
+                );
+
+        for (FeatureRegistry.SubFeature subFeature
+                : feature.subFeatures) {
+            Switch child =
+                    switches.get(
+                            subFeature.id
+                    );
+
+            if (child != null) {
+                child.setEnabled(
+                        masterEnabled
+                );
+            }
+        }
+    }
+
+    private void updateSubSummary(
+            FeatureRegistry.Feature feature
+    ) {
+        TextView label =
+                subSummaryViews.get(
+                        feature.id
+                );
+
+        LinearLayout container =
+                subContainers.get(
+                        feature.id
+                );
+
+        if (label == null
+                || container == null) {
+            return;
+        }
+
+        int rawEnabled = 0;
+
+        for (FeatureRegistry.SubFeature subFeature
+                : feature.subFeatures) {
+            if (FeaturePrefs.isEnabled(
+                    preferences,
+                    subFeature.id
+            )) {
+                rawEnabled++;
+            }
+        }
+
+        boolean masterEnabled =
+                FeaturePrefs.isEnabled(
+                        preferences,
+                        feature.id
+                );
+
+        boolean expanded =
+                container.getVisibility()
+                        == View.VISIBLE;
+
+        String arrow =
+                expanded ? " ▴" : " ▾";
+
+        if (masterEnabled) {
+            label.setText(
+                    "子功能 "
+                            + rawEnabled
+                            + "/"
+                            + feature.subFeatures.size()
+                            + " 已开启 · 点击"
+                            + (expanded
+                            ? "收起"
+                            : "展开")
+                            + arrow
+            );
+        } else {
+            label.setText(
+                    "总开关已关闭 · 保留 "
+                            + rawEnabled
+                            + "/"
+                            + feature.subFeatures.size()
+                            + " 个子设置 · 点击"
+                            + (expanded
+                            ? "收起"
+                            : "展开")
+                            + arrow
+            );
+        }
     }
 
     private String buildTargetStatus(
@@ -354,18 +763,31 @@ public final class MainActivity extends Activity {
             return "作用范围：当前 LSPosed Scope";
         }
 
-        StringBuilder builder = new StringBuilder();
+        StringBuilder builder =
+                new StringBuilder();
+
         int installed = 0;
 
-        for (String packageName : feature.packages) {
-            String version = getVersion(packageName);
-            if (version != null) {
-                installed++;
-                if (builder.length() > 0) {
-                    builder.append(" · ");
-                }
-                builder.append("已安装 ").append(version);
+        for (String packageName
+                : feature.packages) {
+            String version =
+                    getVersion(
+                            packageName
+                    );
+
+            if (version == null) {
+                continue;
             }
+
+            installed++;
+
+            if (builder.length() > 0) {
+                builder.append(" · ");
+            }
+
+            builder.append(
+                    "已安装 "
+            ).append(version);
         }
 
         if (installed == 0) {
@@ -374,55 +796,100 @@ public final class MainActivity extends Activity {
                     : "目标 App 均未安装";
         }
 
-        if (installed < feature.packages.size()) {
+        if (installed
+                < feature.packages.size()) {
             builder.append(" · ")
                     .append(installed)
                     .append("/")
-                    .append(feature.packages.size())
+                    .append(
+                            feature.packages.size()
+                    )
                     .append(" 个目标已安装");
         }
 
         return builder.toString();
     }
 
-    private String getVersion(String packageName) {
+    private String getVersion(
+            String packageName
+    ) {
         try {
-            PackageInfo info = getPackageManager()
-                    .getPackageInfo(packageName, 0);
-            String version = info.versionName;
-            if (version == null || version.trim().isEmpty()) {
+            PackageInfo info =
+                    getPackageManager()
+                            .getPackageInfo(
+                                    packageName,
+                                    0
+                            );
+
+            String version =
+                    info.versionName;
+
+            if (version == null
+                    || version.trim().isEmpty()) {
                 return "版本未知";
             }
+
             return "v" + version;
-        } catch (PackageManager.NameNotFoundException ignored) {
+        } catch (
+                PackageManager.NameNotFoundException ignored
+        ) {
             return null;
         }
     }
 
     private void refreshSummary() {
-        int enabled = 0;
-        int total = FeatureRegistry.all().size();
+        int enabledModules = 0;
+        int totalModules =
+                FeatureRegistry
+                        .all()
+                        .size();
+
+        int enabledSubFeatures = 0;
+        int totalSubFeatures = 0;
+
+        Set<String> targets =
+                new HashSet<>();
 
         for (FeatureRegistry.Feature feature
                 : FeatureRegistry.all()) {
-            if (FeaturePrefs.isEnabled(
-                    preferences,
-                    feature.id
-            )) {
-                enabled++;
+            boolean masterEnabled =
+                    FeaturePrefs.isEnabled(
+                            preferences,
+                            feature.id
+                    );
+
+            if (masterEnabled) {
+                enabledModules++;
             }
+
+            for (FeatureRegistry.SubFeature subFeature
+                    : feature.subFeatures) {
+                totalSubFeatures++;
+
+                if (masterEnabled
+                        && FeaturePrefs.isEnabled(
+                        preferences,
+                        subFeature.id
+                )) {
+                    enabledSubFeatures++;
+                }
+            }
+
+            targets.addAll(
+                    feature.packages
+            );
+
+            updateSubSummary(
+                    feature
+            );
         }
 
         int installedTargets = 0;
-        int targetCount = 0;
 
-        for (FeatureRegistry.Feature feature
-                : FeatureRegistry.all()) {
-            for (String packageName : feature.packages) {
-                targetCount++;
-                if (getVersion(packageName) != null) {
-                    installedTargets++;
-                }
+        for (String packageName : targets) {
+            if (getVersion(packageName)
+                    != null) {
+                installedTargets++;
             }
         }
 
@@ -431,19 +898,33 @@ public final class MainActivity extends Activity {
                         ? "跨进程配置：可用"
                         : "跨进程配置：不可用"
         );
+
         configStatus.setTextColor(
                 crossProcessAvailable
                         ? COLOR_OK
                         : COLOR_WARN
         );
 
-        enabledSummary.setText(
+        String enabledText =
                 String.format(
                         Locale.getDefault(),
                         "已启用模块：%d / %d",
-                        enabled,
-                        total
-                )
+                        enabledModules,
+                        totalModules
+                );
+
+        if (totalSubFeatures > 0) {
+            enabledText +=
+                    String.format(
+                            Locale.getDefault(),
+                            " · 生效子功能：%d / %d",
+                            enabledSubFeatures,
+                            totalSubFeatures
+                    );
+        }
+
+        enabledSummary.setText(
+                enabledText
         );
 
         installedSummary.setText(
@@ -451,37 +932,52 @@ public final class MainActivity extends Activity {
                         Locale.getDefault(),
                         "已安装目标：%d / %d",
                         installedTargets,
-                        targetCount
+                        targets.size()
                 )
         );
 
-        long changedAt = preferences.getLong(
-                FeaturePrefs.KEY_LAST_CHANGED_AT,
-                0L
-        );
+        long changedAt =
+                preferences.getLong(
+                        FeaturePrefs
+                                .KEY_LAST_CHANGED_AT,
+                        0L
+                );
 
         changedSummary.setText(
                 changedAt <= 0L
                         ? "配置修改：尚未修改"
                         : "最近修改："
-                        + DateFormat.getDateTimeInstance(
+                        + DateFormat
+                        .getDateTimeInstance(
                                 DateFormat.SHORT,
                                 DateFormat.SHORT
-                        ).format(new Date(changedAt))
+                        )
+                        .format(
+                                new Date(
+                                        changedAt
+                                )
+                        )
         );
     }
 
-    private void setAllFeatures(boolean enabled) {
+    private void setAllFeatures(
+            boolean enabled
+    ) {
         SharedPreferences.Editor editor =
                 preferences.edit();
 
-        for (FeatureRegistry.Feature feature
-                : FeatureRegistry.all()) {
-            editor.putBoolean(feature.id, enabled);
+        for (String key
+                : FeatureRegistry
+                .allPreferenceKeys()) {
+            editor.putBoolean(
+                    key,
+                    enabled
+            );
         }
 
         editor.putLong(
-                FeaturePrefs.KEY_LAST_CHANGED_AT,
+                FeaturePrefs
+                        .KEY_LAST_CHANGED_AT,
                 System.currentTimeMillis()
         );
 
@@ -495,14 +991,19 @@ public final class MainActivity extends Activity {
         }
 
         updatingSwitches = true;
+
         try {
-            for (Switch toggle : switches.values()) {
-                toggle.setChecked(enabled);
+            for (Switch toggle
+                    : switches.values()) {
+                toggle.setChecked(
+                        enabled
+                );
             }
         } finally {
             updatingSwitches = false;
         }
 
+        refreshChildSwitchStates();
         refreshSummary();
     }
 
@@ -510,13 +1011,19 @@ public final class MainActivity extends Activity {
         SharedPreferences.Editor editor =
                 preferences.edit();
 
-        for (FeatureRegistry.Feature feature
-                : FeatureRegistry.all()) {
-            editor.remove(feature.id);
+        for (String key
+                : FeatureRegistry
+                .allPreferenceKeys()) {
+            editor.remove(key);
         }
 
+        editor.remove(
+                "screenshot_privacy"
+        );
+
         editor.putLong(
-                FeaturePrefs.KEY_LAST_CHANGED_AT,
+                FeaturePrefs
+                        .KEY_LAST_CHANGED_AT,
                 System.currentTimeMillis()
         );
 
@@ -530,31 +1037,49 @@ public final class MainActivity extends Activity {
         }
 
         updatingSwitches = true;
+
         try {
-            for (Switch toggle : switches.values()) {
+            for (Switch toggle
+                    : switches.values()) {
                 toggle.setChecked(true);
             }
         } finally {
             updatingSwitches = false;
         }
 
+        refreshChildSwitchStates();
         refreshSummary();
 
         Toast.makeText(
                 this,
-                "已恢复默认：全部开启",
+                "已恢复默认：总开关与子功能全部开启",
                 Toast.LENGTH_SHORT
         ).show();
     }
 
+    private void refreshChildSwitchStates() {
+        for (FeatureRegistry.Feature feature
+                : FeatureRegistry.all()) {
+            updateChildSwitchStates(
+                    feature
+            );
+        }
+    }
+
     private LinearLayout vertical() {
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout layout =
+                new LinearLayout(this);
+
+        layout.setOrientation(
+                LinearLayout.VERTICAL
+        );
+
         return layout;
     }
 
     private LinearLayout card() {
         LinearLayout card = vertical();
+
         card.setPadding(
                 dp(16),
                 dp(15),
@@ -564,18 +1089,32 @@ public final class MainActivity extends Activity {
 
         GradientDrawable background =
                 new GradientDrawable();
-        background.setColor(COLOR_CARD);
-        background.setCornerRadius(dp(15));
+
+        background.setColor(
+                COLOR_CARD
+        );
+        background.setCornerRadius(
+                dp(15)
+        );
         background.setStroke(
                 dp(1),
-                Color.rgb(232, 234, 238)
+                Color.rgb(
+                        232,
+                        234,
+                        238
+                )
         );
-        card.setBackground(background);
+
+        card.setBackground(
+                background
+        );
 
         return card;
     }
 
-    private TextView sectionTitle(String value) {
+    private TextView sectionTitle(
+            String value
+    ) {
         return text(
                 value,
                 15,
@@ -590,7 +1129,9 @@ public final class MainActivity extends Activity {
             int color,
             int style
     ) {
-        TextView view = new TextView(this);
+        TextView view =
+                new TextView(this);
+
         view.setText(value);
         view.setTextSize(sp);
         view.setTextColor(color);
@@ -598,15 +1139,23 @@ public final class MainActivity extends Activity {
                 Typeface.DEFAULT,
                 style
         );
+
         return view;
     }
 
-    private Button actionButton(String value) {
-        Button button = new Button(this);
+    private Button actionButton(
+            String value
+    ) {
+        Button button =
+                new Button(this);
+
         button.setText(value);
         button.setTextSize(13);
         button.setAllCaps(false);
-        button.setTextColor(COLOR_ACCENT);
+        button.setTextColor(
+                COLOR_ACCENT
+        );
+
         return button;
     }
 
@@ -620,7 +1169,10 @@ public final class MainActivity extends Activity {
                         dp(48),
                         weight
                 );
-        params.leftMargin = leftMargin;
+
+        params.leftMargin =
+                leftMargin;
+
         return params;
     }
 
@@ -631,9 +1183,15 @@ public final class MainActivity extends Activity {
         );
     }
 
-    private LinearLayout.LayoutParams topMargin(int margin) {
-        LinearLayout.LayoutParams params = wrapMatch();
-        params.topMargin = margin;
+    private LinearLayout.LayoutParams topMargin(
+            int margin
+    ) {
+        LinearLayout.LayoutParams params =
+                wrapMatch();
+
+        params.topMargin =
+                margin;
+
         return params;
     }
 
@@ -642,6 +1200,9 @@ public final class MainActivity extends Activity {
                 getResources()
                         .getDisplayMetrics()
                         .density;
-        return Math.round(value * density);
+
+        return Math.round(
+                value * density
+        );
     }
 }
