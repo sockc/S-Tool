@@ -5,13 +5,17 @@ import android.content.SharedPreferences;
 
 public final class FeaturePrefs {
 
-    public static final String PREF_FILE = "s_tool_features";
-    public static final String KEY_LAST_CHANGED_AT = "_last_changed_at";
+    public static final String PREF_FILE =
+            "s_tool_features";
+    public static final String KEY_LAST_CHANGED_AT =
+            "_last_changed_at";
 
     private static final String LEGACY_SCREENSHOT_PRIVACY =
             "screenshot_privacy";
     private static final String NEW_SCREENSHOT_PRIVACY =
             "unicom.screenshot_privacy";
+    private static final String KEY_UNIVERSAL_APP_SCOPE_MIGRATED =
+            "_universal_app_scope_migrated_v1";
 
     private FeaturePrefs() {
     }
@@ -25,22 +29,32 @@ public final class FeaturePrefs {
                 boolean crossProcessAvailable
         ) {
             this.preferences = preferences;
-            this.crossProcessAvailable = crossProcessAvailable;
+            this.crossProcessAvailable =
+                    crossProcessAvailable;
         }
     }
 
-    public static OpenResult open(Context context) {
+    public static OpenResult open(
+            Context context
+    ) {
         SharedPreferences preferences =
                 context.getSharedPreferences(
                         PREF_FILE,
                         Context.MODE_PRIVATE
                 );
 
-        migrateLegacyPreferences(preferences);
+        migrateLegacyPreferences(
+                preferences
+        );
+        migrateUniversalAppSelections(
+                preferences
+        );
 
         return new OpenResult(
                 preferences,
-                ConfigProvider.isAvailable(context)
+                ConfigProvider.isAvailable(
+                        context
+                )
         );
     }
 
@@ -69,6 +83,52 @@ public final class FeaturePrefs {
                     )
                     .commit();
         }
+    }
+
+    static void migrateUniversalAppSelections(
+            SharedPreferences preferences
+    ) {
+        if (preferences.getBoolean(
+                KEY_UNIVERSAL_APP_SCOPE_MIGRATED,
+                false
+        )) {
+            return;
+        }
+
+        boolean universalWasEnabled =
+                preferences.getBoolean(
+                        FeatureRegistry.UNIVERSAL_PRIVACY,
+                        FeatureRegistry.defaultEnabled(
+                                FeatureRegistry.UNIVERSAL_PRIVACY
+                        )
+                );
+
+        SharedPreferences.Editor editor =
+                preferences.edit();
+
+        for (FeatureRegistry.TargetApp app
+                : FeatureRegistry.targetApps()) {
+            editor.putBoolean(
+                    FeatureRegistry.universalAppKey(
+                            FeatureRegistry.UNIVERSAL_LOCATION,
+                            app.packageName
+                    ),
+                    universalWasEnabled
+            );
+            editor.putBoolean(
+                    FeatureRegistry.universalAppKey(
+                            FeatureRegistry.UNIVERSAL_SCREENSHOT,
+                            app.packageName
+                    ),
+                    universalWasEnabled
+            );
+        }
+
+        editor.putBoolean(
+                KEY_UNIVERSAL_APP_SCOPE_MIGRATED,
+                true
+        );
+        editor.commit();
     }
 
     public static boolean isEnabled(
