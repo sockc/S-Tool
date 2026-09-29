@@ -1497,7 +1497,7 @@ final class GaodeR3Engine {
         return null;
     }
 
-    private static String textFor(
+    static String textFor(
             View view
     ) {
         String anchored =

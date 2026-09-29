@@ -43,7 +43,7 @@ public final class ConfigProvider extends ContentProvider {
     public static final String KEY_RECORDED =
             "_recorded";
 
-    public static final int PROTOCOL_VERSION = 6;
+    public static final int PROTOCOL_VERSION = 7;
 
     @Override
     public boolean onCreate() {
@@ -109,6 +109,9 @@ public final class ConfigProvider extends ContentProvider {
                 preferences
         );
         FeaturePrefs.migrateIndependentUniversalCapabilities(
+                preferences
+        );
+        FeaturePrefs.migrateGaodeMinimalHome(
                 preferences
         );
 
