@@ -38,8 +38,36 @@ public final class UniversalPrivacyHook
                         lpparam.packageName
                 );
 
+        boolean clipboardEnabled =
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_CLIPBOARD,
+                        lpparam.packageName
+                );
+
+        boolean deviceIdEnabled =
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_DEVICE_ID,
+                        lpparam.packageName
+                );
+
+        boolean fileMediaEnabled =
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_FILE_MEDIA,
+                        lpparam.packageName
+                );
+
+        boolean appListEnabled =
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_APP_LIST,
+                        lpparam.packageName
+                );
+
         if (!locationEnabled
-                && !screenshotEnabled) {
+                && !screenshotEnabled
+                && !clipboardEnabled
+                && !deviceIdEnabled
+                && !fileMediaEnabled
+                && !appListEnabled) {
             return;
         }
 
@@ -51,6 +79,14 @@ public final class UniversalPrivacyHook
                         + locationEnabled
                         + " screenshot="
                         + screenshotEnabled
+                        + " clipboard="
+                        + clipboardEnabled
+                        + " deviceId="
+                        + deviceIdEnabled
+                        + " fileMedia="
+                        + fileMediaEnabled
+                        + " appList="
+                        + appListEnabled
         );
 
         if (locationEnabled) {
@@ -64,6 +100,35 @@ public final class UniversalPrivacyHook
             ScreenshotPrivacyEngine.install(
                     TAG,
                     lpparam.packageName
+            );
+        }
+
+        if (clipboardEnabled) {
+            ClipboardPrivacyEngine.install(
+                    TAG,
+                    lpparam.packageName
+            );
+        }
+
+        if (deviceIdEnabled) {
+            DeviceIdPrivacyEngine.install(
+                    TAG,
+                    lpparam.packageName
+            );
+        }
+
+        if (fileMediaEnabled) {
+            FileMediaPrivacyEngine.install(
+                    TAG,
+                    lpparam.packageName
+            );
+        }
+
+        if (appListEnabled) {
+            AppListPrivacyEngine.install(
+                    TAG,
+                    lpparam.packageName,
+                    lpparam.classLoader
             );
         }
     }
@@ -85,6 +150,12 @@ public final class UniversalPrivacyHook
                 packageName
         )
                 || "com.android.settings".equals(
+                packageName
+        )
+                || "com.google.android.webview".equals(
+                packageName
+        )
+                || "com.android.webview".equals(
                 packageName
         );
     }
