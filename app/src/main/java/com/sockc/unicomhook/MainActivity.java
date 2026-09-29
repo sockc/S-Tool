@@ -1,6 +1,7 @@
 package com.sockc.unicomhook;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -55,6 +56,8 @@ public final class MainActivity extends Activity {
     private TextView injectionSummary;
     private TextView changedSummary;
     private TextView universalAppSummary;
+    private TextView locationMenuStatus;
+    private TextView screenshotMenuStatus;
 
     private final Map<String, Switch> switches =
             new LinkedHashMap<>();
@@ -104,6 +107,7 @@ public final class MainActivity extends Activity {
 
         if (configStatus != null) {
             refreshSummary();
+            refreshUniversalMenuStatuses();
         }
     }
 
@@ -141,7 +145,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.3.3 · 按 App 通用保护与诊断",
+                "V1.3.4 · 通用保护菜单与任意 App",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -175,19 +179,23 @@ public final class MainActivity extends Activity {
                 topMargin(dp(24))
         );
 
-        for (FeatureRegistry.Feature feature
-                : FeatureRegistry.all()) {
-            if (!"universal_privacy".equals(
-                    feature.id
-            )) {
-                continue;
-            }
+        root.addView(
+                buildUniversalMenuCard(
+                        FeatureRegistry.UNIVERSAL_LOCATION,
+                        "定位保护",
+                        "阻断所选 App 的 Android 原生定位入口"
+                ),
+                topMargin(dp(10))
+        );
 
-            root.addView(
-                    buildFeatureCard(feature),
-                    topMargin(dp(10))
-            );
-        }
+        root.addView(
+                buildUniversalMenuCard(
+                        FeatureRegistry.UNIVERSAL_SCREENSHOT,
+                        "截图隐私",
+                        "阻止所选 App 检测截图与监听常见截图媒体变化"
+                ),
+                topMargin(dp(10))
+        );
 
         root.addView(
                 sectionTitle("应用增强"),
@@ -209,10 +217,9 @@ public final class MainActivity extends Activity {
         }
 
         TextView footer = text(
-                "通用定位与截图保护现在可按 App 分别选择；"
-                        + " 未选择的 App 不启用对应通用保护。"
-                        + " “尚无注入记录”只表示更新后还没有记录到该 App 启动。"
-                        + " 修改开关后请强制停止并重新打开对应目标 App。",
+                "点击“定位保护”或“截图隐私”进入应用选择器，可搜索并选择任意已安装 App。"
+                        + " 系统应用默认隐藏；目标 App 仍需在 LSPosed 的 S Tool 作用域中勾选。"
+                        + " 修改后请强制停止并重新打开对应目标 App。",
                 12,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -233,6 +240,172 @@ public final class MainActivity extends Activity {
         );
 
         return scrollView;
+    }
+
+    private View buildUniversalMenuCard(
+            String capabilityId,
+            String titleValue,
+            String summaryValue
+    ) {
+        LinearLayout card = card();
+
+        LinearLayout row =
+                new LinearLayout(this);
+        row.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
+        row.setGravity(
+                Gravity.CENTER_VERTICAL
+        );
+
+        LinearLayout copy = vertical();
+
+        TextView title = text(
+                titleValue,
+                17,
+                COLOR_TEXT,
+                Typeface.BOLD
+        );
+        copy.addView(title);
+
+        TextView status = text(
+                "",
+                12,
+                COLOR_SUBTEXT,
+                Typeface.NORMAL
+        );
+        copy.addView(
+                status,
+                topMargin(dp(3))
+        );
+
+        if (FeatureRegistry.UNIVERSAL_LOCATION.equals(
+                capabilityId
+        )) {
+            locationMenuStatus =
+                    status;
+        } else {
+            screenshotMenuStatus =
+                    status;
+        }
+
+        TextView summary = text(
+                summaryValue,
+                12,
+                COLOR_SUBTEXT,
+                Typeface.NORMAL
+        );
+        copy.addView(
+                summary,
+                topMargin(dp(6))
+        );
+
+        row.addView(
+                copy,
+                new LinearLayout.LayoutParams(
+                        0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        1f
+                )
+        );
+
+        TextView arrow = text(
+                "›",
+                28,
+                COLOR_ACCENT,
+                Typeface.NORMAL
+        );
+        row.addView(arrow);
+
+        card.addView(row);
+        card.setClickable(true);
+        card.setFocusable(true);
+        card.setOnClickListener(
+                view -> openAppSelector(
+                        capabilityId
+                )
+        );
+
+        return card;
+    }
+
+    private void openAppSelector(
+            String capabilityId
+    ) {
+        Intent intent =
+                new Intent(
+                        this,
+                        AppSelectorActivity.class
+                );
+
+        intent.putExtra(
+                AppSelectorActivity.EXTRA_CAPABILITY_ID,
+                capabilityId
+        );
+
+        startActivity(intent);
+    }
+
+    private void refreshUniversalMenuStatuses() {
+        updateUniversalMenuStatus(
+                FeatureRegistry.UNIVERSAL_LOCATION,
+                locationMenuStatus
+        );
+        updateUniversalMenuStatus(
+                FeatureRegistry.UNIVERSAL_SCREENSHOT,
+                screenshotMenuStatus
+        );
+    }
+
+    private void updateUniversalMenuStatus(
+            String capabilityId,
+            TextView view
+    ) {
+        if (view == null) {
+            return;
+        }
+
+        boolean enabled =
+                FeaturePrefs.isEnabled(
+                        preferences,
+                        FeatureRegistry.UNIVERSAL_PRIVACY
+                )
+                        && FeaturePrefs.isEnabled(
+                        preferences,
+                        capabilityId
+                );
+
+        int selected = 0;
+
+        for (Map.Entry<String, ?>
+                entry
+                : preferences.getAll()
+                .entrySet()) {
+            if (FeatureRegistry.isUniversalAppKey(
+                    capabilityId,
+                    entry.getKey()
+            )
+                    && Boolean.TRUE.equals(
+                    entry.getValue()
+            )) {
+                selected++;
+            }
+        }
+
+        view.setText(
+                (enabled
+                        ? "已开启"
+                        : "已关闭")
+                        + " · 已选择 "
+                        + selected
+                        + " 个 App"
+        );
+
+        view.setTextColor(
+                enabled
+                        ? COLOR_OK
+                        : COLOR_SUBTEXT
+        );
     }
 
     private View buildStatusCard() {
@@ -1452,6 +1625,8 @@ public final class MainActivity extends Activity {
                                 )
                         )
         );
+
+        refreshUniversalMenuStatuses();
     }
 
     private void setAllFeatures(
@@ -1509,6 +1684,15 @@ public final class MainActivity extends Activity {
                 : FeatureRegistry
                 .allPreferenceKeys()) {
             editor.remove(key);
+        }
+
+        for (String key
+                : preferences.getAll().keySet()) {
+            if (FeatureRegistry.isUniversalAppKey(
+                    key
+            )) {
+                editor.remove(key);
+            }
         }
 
         editor.remove(
