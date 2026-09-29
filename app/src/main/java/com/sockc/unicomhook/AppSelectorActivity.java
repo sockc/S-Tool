@@ -94,10 +94,7 @@ public final class AppSelectorActivity extends Activity {
                         EXTRA_CAPABILITY_ID
                 );
 
-        if (!FeatureRegistry.UNIVERSAL_LOCATION.equals(
-                capabilityId
-        )
-                && !FeatureRegistry.UNIVERSAL_SCREENSHOT.equals(
+        if (!FeatureRegistry.isUniversalCapability(
                 capabilityId
         )) {
             finish();
@@ -845,40 +842,16 @@ public final class AppSelectorActivity extends Activity {
     private boolean setCapabilityEnabled(
             boolean enabled
     ) {
-        String otherCapability =
-                FeatureRegistry.UNIVERSAL_LOCATION.equals(
-                        capabilityId
+        return preferences.edit()
+                .putBoolean(
+                        capabilityId,
+                        enabled
                 )
-                        ? FeatureRegistry.UNIVERSAL_SCREENSHOT
-                        : FeatureRegistry.UNIVERSAL_LOCATION;
-
-        boolean otherEnabled =
-                FeaturePrefs.isEnabled(
-                        preferences,
-                        FeatureRegistry.UNIVERSAL_PRIVACY
+                .putLong(
+                        FeaturePrefs.KEY_LAST_CHANGED_AT,
+                        System.currentTimeMillis()
                 )
-                        && FeaturePrefs.isEnabled(
-                        preferences,
-                        otherCapability
-                );
-
-        SharedPreferences.Editor editor =
-                preferences.edit();
-
-        editor.putBoolean(
-                capabilityId,
-                enabled
-        );
-        editor.putBoolean(
-                FeatureRegistry.UNIVERSAL_PRIVACY,
-                enabled || otherEnabled
-        );
-        editor.putLong(
-                FeaturePrefs.KEY_LAST_CHANGED_AT,
-                System.currentTimeMillis()
-        );
-
-        return editor.commit();
+                .commit();
     }
 
     private void refreshMasterState() {
@@ -886,18 +859,11 @@ public final class AppSelectorActivity extends Activity {
             return;
         }
 
-        boolean effective =
+        masterSwitch.setChecked(
                 FeaturePrefs.isEnabled(
                         preferences,
-                        FeatureRegistry.UNIVERSAL_PRIVACY
-                )
-                        && FeaturePrefs.isEnabled(
-                        preferences,
                         capabilityId
-                );
-
-        masterSwitch.setChecked(
-                effective
+                )
         );
     }
 
@@ -931,19 +897,51 @@ public final class AppSelectorActivity extends Activity {
     }
 
     private String capabilityTitle() {
-        return FeatureRegistry.UNIVERSAL_LOCATION.equals(
+        return FeatureRegistry.universalCapabilityTitle(
                 capabilityId
-        )
-                ? "定位保护"
-                : "截图隐私";
+        );
     }
 
     private String capabilitySummary() {
-        return FeatureRegistry.UNIVERSAL_LOCATION.equals(
+        if (FeatureRegistry.UNIVERSAL_LOCATION.equals(
                 capabilityId
-        )
-                ? "阻断所选 App 的 Android 原生定位入口。高德、地图、打车等依赖真实定位的 App 建议不要开启。"
-                : "阻止所选 App 注册 Android 14+ 截图回调和常见媒体库截图监听。";
+        )) {
+            return "阻断所选 App 的 Android 原生定位入口。地图、导航、打车等依赖真实定位的 App 建议不要开启。";
+        }
+
+        if (FeatureRegistry.UNIVERSAL_SCREENSHOT.equals(
+                capabilityId
+        )) {
+            return "阻止所选 App 注册 Android 14+ 截图回调和常见媒体库截图监听。";
+        }
+
+        if (FeatureRegistry.UNIVERSAL_CLIPBOARD.equals(
+                capabilityId
+        )) {
+            return "让所选 App 看不到当前剪贴板内容与剪贴板状态。需要粘贴、验证码读取的 App 请谨慎开启。";
+        }
+
+        if (FeatureRegistry.UNIVERSAL_DEVICE_ID.equals(
+                capabilityId
+        )) {
+            return "保护所选 App 读取 IMEI、MEID、IMSI、SIM 序列号、Android ID 和设备序列号。部分登录或风控功能可能受影响。";
+        }
+
+        if (FeatureRegistry.UNIVERSAL_FILE_MEDIA.equals(
+                capabilityId
+        )) {
+            return "隐藏所选 App 对 DCIM、Pictures、Download、Movies、Screenshots 等公共目录的常规 File 扫描。不会拦截系统文件选择器。";
+        }
+
+        if (FeatureRegistry.UNIVERSAL_APP_LIST.equals(
+                capabilityId
+        )) {
+            return "限制所选 App 批量枚举已安装应用和软件包。仅处理批量枚举 API，降低对正常打开其它 App 的影响。";
+        }
+
+        return FeatureRegistry.universalCapabilitySummary(
+                capabilityId
+        );
     }
 
     private LinearLayout vertical() {

@@ -108,10 +108,6 @@ public final class SMainHook implements IXposedHookLoadPackage {
                             "com.sockc.unicomhook.PinduoduoHook"
                     ),
                     new HookEntry(
-                            "clipboard",
-                            "com.sockc.unicomhook.ClipboardHook"
-                    ),
-                    new HookEntry(
                             "zhihuijia",
                             "com.sockc.unicomhook.ZhihuijiaHook"
                     ),
@@ -247,15 +243,23 @@ public final class SMainHook implements IXposedHookLoadPackage {
                 continue;
             }
 
-            boolean enabled =
-                    entry.requiredSubFeatureId == null
-                            ? config.isEnabled(
-                            entry.featureId
-                    )
-                            : config.isEnabled(
-                            entry.featureId,
-                            entry.requiredSubFeatureId
-                    );
+            boolean enabled;
+
+            if (FeatureRegistry.UNIVERSAL_PRIVACY.equals(
+                    entry.featureId
+            )) {
+                enabled = true;
+            } else {
+                enabled =
+                        entry.requiredSubFeatureId == null
+                                ? config.isEnabled(
+                                entry.featureId
+                        )
+                                : config.isEnabled(
+                                entry.featureId,
+                                entry.requiredSubFeatureId
+                        );
+            }
 
             if (!enabled) {
                 continue;

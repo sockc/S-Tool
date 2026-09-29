@@ -32,11 +32,18 @@ public class MeituanHook implements IXposedHookLoadPackage {
 
         HookConfig config = HookConfig.load();
 
+        boolean universalFilePrivacy =
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_FILE_MEDIA,
+                        TARGET_PACKAGE
+                );
+
         boolean filePrivacy =
                 config.isEnabled(
                         "meituan",
                         "meituan.file_privacy"
-                );
+                )
+                        && !universalFilePrivacy;
         boolean splashAd =
                 config.isEnabled(
                         "meituan",
@@ -47,11 +54,18 @@ public class MeituanHook implements IXposedHookLoadPackage {
                         "meituan",
                         "meituan.permission_privacy"
                 );
+        boolean universalDeviceIdPrivacy =
+                config.isUniversalAppEnabled(
+                        FeatureRegistry.UNIVERSAL_DEVICE_ID,
+                        TARGET_PACKAGE
+                );
+
         boolean deviceIdPrivacy =
                 config.isEnabled(
                         "meituan",
                         "meituan.device_id_privacy"
-                );
+                )
+                        && !universalDeviceIdPrivacy;
 
         XposedBridge.log(
                 TAG

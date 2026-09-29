@@ -25,9 +25,9 @@ public class ScreenshotPrivacyHook
         HookConfig config =
                 HookConfig.load();
 
-        if (config.isEnabled(
-                "universal_privacy",
-                "universal_privacy.screenshot"
+        if (config.isUniversalAppEnabled(
+                FeatureRegistry.UNIVERSAL_SCREENSHOT,
+                TARGET_PACKAGE
         )) {
             XposedBridge.log(
                     TAG

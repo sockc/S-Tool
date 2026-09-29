@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.4.0
+
+### Universal privacy stage 2
+- Add Universal Clipboard Privacy.
+- Add Universal Device Identifier Privacy.
+- Add Universal File / Media Privacy.
+- Add Universal Installed-App List Privacy.
+- Keep Location Privacy and Screenshot Privacy.
+- All six capabilities are independently enabled and have independent arbitrary-app selections.
+
+### Privacy engines
+- Clipboard: hide primary clip state, clip data, descriptions, and legacy text reads.
+- Device ID: protect common Telephony identifiers, Android ID, and Build serial.
+- File / Media: hide common DCIM, Pictures, Download, Movies, and Screenshots directory listings through File APIs.
+- App List: filter bulk installed-application and installed-package enumeration to the caller and Android core package.
+
+### Architecture
+- Remove the old standalone global ClipboardHook dispatch from SMainHook.
+- UniversalPrivacyHook becomes the single dispatcher for the six reusable privacy engines.
+- Decouple universal capability effectiveness from the old parent switch.
+- Keep UniversalPrivacyHook available in all LSPosed-scoped target processes; each engine activates only when its capability and per-app selection are enabled.
+- Keep WebView core packages excluded from universal privacy injection.
+
+### Migration and compatibility
+- Preserve V1.3.x Location / Screenshot effective state.
+- New Device ID, File / Media, and App List capabilities default off.
+- Explicitly enabled legacy Clipboard preference migrates known S Tool target apps to the new per-app Clipboard protection.
+- Unicom location/screenshot, Meituan file/device-id, and Pinduoduo file privacy yield to matching universal engines to avoid duplicate hooks.
+- ConfigProvider protocol bumped to v6.
+
+### UI
+- Add six compact Universal Protection menu cards.
+- Reuse the searchable arbitrary-app selector for every privacy capability.
+- Universal module count reflects whether at least one privacy capability is enabled.
+
+### Version
+- Bump app version to `1.4.0` / versionCode `140`.
+
 ## 1.3.4
 
 ### Universal protection menu

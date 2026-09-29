@@ -56,8 +56,9 @@ public final class MainActivity extends Activity {
     private TextView injectionSummary;
     private TextView changedSummary;
     private TextView universalAppSummary;
-    private TextView locationMenuStatus;
-    private TextView screenshotMenuStatus;
+
+    private final Map<String, TextView> universalMenuStatusViews =
+            new LinkedHashMap<>();
 
     private final Map<String, Switch> switches =
             new LinkedHashMap<>();
@@ -145,7 +146,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.3.4 · 通用保护菜单与任意 App",
+                "V1.4.0 · 通用隐私第二阶段",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -198,6 +199,42 @@ public final class MainActivity extends Activity {
         );
 
         root.addView(
+                buildUniversalMenuCard(
+                        FeatureRegistry.UNIVERSAL_CLIPBOARD,
+                        "剪贴板保护",
+                        "隐藏所选 App 读取到的剪贴板内容与状态"
+                ),
+                topMargin(dp(10))
+        );
+
+        root.addView(
+                buildUniversalMenuCard(
+                        FeatureRegistry.UNIVERSAL_DEVICE_ID,
+                        "设备标识保护",
+                        "保护 IMEI、MEID、IMSI、Android ID 与序列号"
+                ),
+                topMargin(dp(10))
+        );
+
+        root.addView(
+                buildUniversalMenuCard(
+                        FeatureRegistry.UNIVERSAL_FILE_MEDIA,
+                        "文件/相册保护",
+                        "隐藏常见公共媒体与下载目录的文件扫描"
+                ),
+                topMargin(dp(10))
+        );
+
+        root.addView(
+                buildUniversalMenuCard(
+                        FeatureRegistry.UNIVERSAL_APP_LIST,
+                        "应用列表保护",
+                        "限制所选 App 批量枚举手机已安装应用"
+                ),
+                topMargin(dp(10))
+        );
+
+        root.addView(
                 sectionTitle("应用增强"),
                 topMargin(dp(24))
         );
@@ -217,9 +254,9 @@ public final class MainActivity extends Activity {
         }
 
         TextView footer = text(
-                "点击“定位保护”或“截图隐私”进入应用选择器，可搜索并选择任意已安装 App。"
+                "六类通用隐私保护都可独立开启，并分别选择任意已安装 App。"
                         + " 系统应用默认隐藏；目标 App 仍需在 LSPosed 的 S Tool 作用域中勾选。"
-                        + " 修改后请强制停止并重新打开对应目标 App。",
+                        + " 设备标识、文件/相册和应用列表保护可能影响登录、分享或文件功能，建议按需开启。",
                 12,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -279,15 +316,10 @@ public final class MainActivity extends Activity {
                 topMargin(dp(3))
         );
 
-        if (FeatureRegistry.UNIVERSAL_LOCATION.equals(
-                capabilityId
-        )) {
-            locationMenuStatus =
-                    status;
-        } else {
-            screenshotMenuStatus =
-                    status;
-        }
+        universalMenuStatusViews.put(
+                capabilityId,
+                status
+        );
 
         TextView summary = text(
                 summaryValue,
@@ -347,14 +379,15 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshUniversalMenuStatuses() {
-        updateUniversalMenuStatus(
-                FeatureRegistry.UNIVERSAL_LOCATION,
-                locationMenuStatus
-        );
-        updateUniversalMenuStatus(
-                FeatureRegistry.UNIVERSAL_SCREENSHOT,
-                screenshotMenuStatus
-        );
+        for (String capabilityId
+                : FeatureRegistry.universalCapabilities()) {
+            updateUniversalMenuStatus(
+                    capabilityId,
+                    universalMenuStatusViews.get(
+                            capabilityId
+                    )
+            );
+        }
     }
 
     private void updateUniversalMenuStatus(
@@ -367,10 +400,6 @@ public final class MainActivity extends Activity {
 
         boolean enabled =
                 FeaturePrefs.isEnabled(
-                        preferences,
-                        FeatureRegistry.UNIVERSAL_PRIVACY
-                )
-                        && FeaturePrefs.isEnabled(
                         preferences,
                         capabilityId
                 );
@@ -1451,27 +1480,46 @@ public final class MainActivity extends Activity {
 
         for (FeatureRegistry.Feature feature
                 : FeatureRegistry.all()) {
+            boolean universal =
+                    FeatureRegistry.UNIVERSAL_PRIVACY.equals(
+                            feature.id
+                    );
+
             boolean masterEnabled =
                     FeaturePrefs.isEnabled(
                             preferences,
                             feature.id
                     );
 
-            if (masterEnabled) {
-                enabledModules++;
-            }
+            boolean anyUniversalEnabled =
+                    false;
 
             for (FeatureRegistry.SubFeature subFeature
                     : feature.subFeatures) {
                 totalSubFeatures++;
 
-                if (masterEnabled
-                        && FeaturePrefs.isEnabled(
-                        preferences,
-                        subFeature.id
-                )) {
+                boolean childEnabled =
+                        FeaturePrefs.isEnabled(
+                                preferences,
+                                subFeature.id
+                        );
+
+                if (universal) {
+                    if (childEnabled) {
+                        enabledSubFeatures++;
+                        anyUniversalEnabled =
+                                true;
+                    }
+                } else if (masterEnabled
+                        && childEnabled) {
                     enabledSubFeatures++;
                 }
+            }
+
+            if (universal
+                    ? anyUniversalEnabled
+                    : masterEnabled) {
+                enabledModules++;
             }
 
             targets.addAll(

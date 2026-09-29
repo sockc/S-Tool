@@ -15,11 +15,37 @@ public final class FeatureRegistry {
             "universal_privacy.location";
     public static final String UNIVERSAL_SCREENSHOT =
             "universal_privacy.screenshot";
+    public static final String UNIVERSAL_CLIPBOARD =
+            "universal_privacy.clipboard";
+    public static final String UNIVERSAL_DEVICE_ID =
+            "universal_privacy.device_id";
+    public static final String UNIVERSAL_FILE_MEDIA =
+            "universal_privacy.file_media";
+    public static final String UNIVERSAL_APP_LIST =
+            "universal_privacy.app_list";
 
     public static final String LOCATION_APP_PREFIX =
             "universal_privacy.location.app.";
     public static final String SCREENSHOT_APP_PREFIX =
             "universal_privacy.screenshot.app.";
+    public static final String CLIPBOARD_APP_PREFIX =
+            "universal_privacy.clipboard.app.";
+    public static final String DEVICE_ID_APP_PREFIX =
+            "universal_privacy.device_id.app.";
+    public static final String FILE_MEDIA_APP_PREFIX =
+            "universal_privacy.file_media.app.";
+    public static final String APP_LIST_APP_PREFIX =
+            "universal_privacy.app_list.app.";
+
+    private static final List<String> UNIVERSAL_CAPABILITIES =
+            Collections.unmodifiableList(Arrays.asList(
+                    UNIVERSAL_LOCATION,
+                    UNIVERSAL_SCREENSHOT,
+                    UNIVERSAL_CLIPBOARD,
+                    UNIVERSAL_DEVICE_ID,
+                    UNIVERSAL_FILE_MEDIA,
+                    UNIVERSAL_APP_LIST
+            ));
 
     public static final class SubFeature {
         public final String id;
@@ -165,18 +191,44 @@ public final class FeatureRegistry {
                     featureWithSubs(
                             UNIVERSAL_PRIVACY,
                             "通用隐私保护",
-                            "定位与截图可按 App 分别控制",
-                            false,
+                            "六类保护均可独立开启并按 App 选择",
+                            true,
                             Arrays.asList(
                                     sub(
                                             UNIVERSAL_LOCATION,
-                                            "通用定位保护",
-                                            "阻断 Android 原生最近定位、当前定位与持续定位请求"
+                                            "定位保护",
+                                            "阻断 Android 原生定位入口",
+                                            false
                                     ),
                                     sub(
                                             UNIVERSAL_SCREENSHOT,
-                                            "通用截图隐私",
-                                            "阻止 Android 14+ 截图回调注册与常见媒体库截图监听"
+                                            "截图隐私",
+                                            "阻止截图回调与常见截图媒体监听",
+                                            false
+                                    ),
+                                    sub(
+                                            UNIVERSAL_CLIPBOARD,
+                                            "剪贴板保护",
+                                            "隐藏剪贴板内容与状态",
+                                            false
+                                    ),
+                                    sub(
+                                            UNIVERSAL_DEVICE_ID,
+                                            "设备标识保护",
+                                            "保护 IMEI、MEID、IMSI、Android ID 与序列号",
+                                            false
+                                    ),
+                                    sub(
+                                            UNIVERSAL_FILE_MEDIA,
+                                            "文件/相册保护",
+                                            "隐藏 DCIM、Pictures、Download、Movies 等公共目录扫描",
+                                            false
+                                    ),
+                                    sub(
+                                            UNIVERSAL_APP_LIST,
+                                            "应用列表保护",
+                                            "限制批量枚举已安装应用和软件包",
+                                            false
                                     )
                             )
                     ),
@@ -348,11 +400,6 @@ public final class FeatureRegistry {
                             "com.xunmeng.pinduoduo"
                     ),
                     feature(
-                            "clipboard",
-                            "剪贴板保护",
-                            "对 LSPosed 作用域中的应用隐藏剪贴板内容"
-                    ),
-                    feature(
                             "zhihuijia",
                             "智汇家",
                             "版本升级弹窗处理",
@@ -395,6 +442,62 @@ public final class FeatureRegistry {
 
     public static List<Feature> all() {
         return FEATURES;
+    }
+
+    public static List<String> universalCapabilities() {
+        return UNIVERSAL_CAPABILITIES;
+    }
+
+    public static boolean isUniversalCapability(
+            String capabilityId
+    ) {
+        return UNIVERSAL_CAPABILITIES.contains(
+                capabilityId
+        );
+    }
+
+    public static String universalCapabilityTitle(
+            String capabilityId
+    ) {
+        Feature feature =
+                findFeature(
+                        UNIVERSAL_PRIVACY
+                );
+
+        if (feature != null) {
+            for (SubFeature subFeature
+                    : feature.subFeatures) {
+                if (subFeature.id.equals(
+                        capabilityId
+                )) {
+                    return subFeature.title;
+                }
+            }
+        }
+
+        return capabilityId;
+    }
+
+    public static String universalCapabilitySummary(
+            String capabilityId
+    ) {
+        Feature feature =
+                findFeature(
+                        UNIVERSAL_PRIVACY
+                );
+
+        if (feature != null) {
+            for (SubFeature subFeature
+                    : feature.subFeatures) {
+                if (subFeature.id.equals(
+                        capabilityId
+                )) {
+                    return subFeature.summary;
+                }
+            }
+        }
+
+        return "";
     }
 
     public static Feature findFeature(
@@ -497,19 +600,52 @@ public final class FeatureRegistry {
             return SCREENSHOT_APP_PREFIX;
         }
 
+        if (UNIVERSAL_CLIPBOARD.equals(
+                capabilityId
+        )) {
+            return CLIPBOARD_APP_PREFIX;
+        }
+
+        if (UNIVERSAL_DEVICE_ID.equals(
+                capabilityId
+        )) {
+            return DEVICE_ID_APP_PREFIX;
+        }
+
+        if (UNIVERSAL_FILE_MEDIA.equals(
+                capabilityId
+        )) {
+            return FILE_MEDIA_APP_PREFIX;
+        }
+
+        if (UNIVERSAL_APP_LIST.equals(
+                capabilityId
+        )) {
+            return APP_LIST_APP_PREFIX;
+        }
+
         return LOCATION_APP_PREFIX;
     }
 
     public static boolean isUniversalAppKey(
             String key
     ) {
-        return key != null
-                && (key.startsWith(
-                LOCATION_APP_PREFIX
-        )
-                || key.startsWith(
-                SCREENSHOT_APP_PREFIX
-        ));
+        if (key == null) {
+            return false;
+        }
+
+        for (String capabilityId
+                : UNIVERSAL_CAPABILITIES) {
+            if (key.startsWith(
+                    universalAppPrefix(
+                            capabilityId
+                    )
+            )) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static boolean isUniversalAppKey(
@@ -517,6 +653,9 @@ public final class FeatureRegistry {
             String key
     ) {
         return key != null
+                && isUniversalCapability(
+                        capabilityId
+                )
                 && key.startsWith(
                 universalAppPrefix(
                         capabilityId
@@ -562,13 +701,7 @@ public final class FeatureRegistry {
     public static boolean defaultEnabled(
             String key
     ) {
-        if (key != null
-                && (key.startsWith(
-                        LOCATION_APP_PREFIX
-                )
-                || key.startsWith(
-                        SCREENSHOT_APP_PREFIX
-                ))) {
+        if (isUniversalAppKey(key)) {
             return false;
         }
 
