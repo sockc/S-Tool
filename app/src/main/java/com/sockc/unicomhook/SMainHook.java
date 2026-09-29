@@ -55,7 +55,7 @@ public final class SMainHook implements IXposedHookLoadPackage {
     private final HookEntry[] entries =
             new HookEntry[] {
                     new HookEntry(
-                            "universal_privacy",
+                            FeatureRegistry.UNIVERSAL_PRIVACY,
                             "com.sockc.unicomhook.UniversalPrivacyHook"
                     ),
                     new HookEntry(
@@ -213,7 +213,8 @@ public final class SMainHook implements IXposedHookLoadPackage {
 
                             dispatchHooks(
                                     lpparam,
-                                    config
+                                    config,
+                                    context
                             );
                         }
                     }
@@ -227,16 +228,25 @@ public final class SMainHook implements IXposedHookLoadPackage {
 
             dispatchHooks(
                     lpparam,
-                    HookConfig.load()
+                    HookConfig.load(),
+                    null
             );
         }
     }
 
     private void dispatchHooks(
             XC_LoadPackage.LoadPackageParam lpparam,
-            HookConfig config
+            HookConfig config,
+            Context context
     ) {
         for (HookEntry entry : entries) {
+            if (!FeatureRegistry.appliesToPackage(
+                    entry.featureId,
+                    lpparam.packageName
+            )) {
+                continue;
+            }
+
             boolean enabled =
                     entry.requiredSubFeatureId == null
                             ? config.isEnabled(
@@ -264,19 +274,30 @@ public final class SMainHook implements IXposedHookLoadPackage {
 
                 if (!(hook
                         instanceof IXposedHookLoadPackage)) {
-                    XposedBridge.log(
-                            TAG
-                                    + entry.delegateClassName
+                    throw new IllegalStateException(
+                            entry.delegateClassName
                                     + " 未实现 IXposedHookLoadPackage"
                     );
-                    continue;
                 }
 
                 ((IXposedHookLoadPackage) hook)
                         .handleLoadPackage(
                                 lpparam
                         );
+
+                ConfigProvider.reportHookResult(
+                        context,
+                        lpparam.packageName,
+                        entry.featureId,
+                        true,
+                        null
+                );
             } catch (Throwable throwable) {
+                String summary =
+                        buildErrorSummary(
+                                throwable
+                        );
+
                 XposedBridge.log(
                         TAG
                                 + "Hook 初始化/执行失败 "
@@ -284,9 +305,40 @@ public final class SMainHook implements IXposedHookLoadPackage {
                                 + " for "
                                 + lpparam.packageName
                                 + ": "
-                                + throwable
+                                + summary
+                );
+
+                ConfigProvider.reportHookResult(
+                        context,
+                        lpparam.packageName,
+                        entry.featureId,
+                        false,
+                        summary
                 );
             }
         }
+    }
+
+    private String buildErrorSummary(
+            Throwable throwable
+    ) {
+        if (throwable == null) {
+            return "未知异常";
+        }
+
+        String name =
+                throwable.getClass()
+                        .getSimpleName();
+        String message =
+                throwable.getMessage();
+
+        if (message == null
+                || message.trim().isEmpty()) {
+            return name;
+        }
+
+        return name
+                + ": "
+                + message;
     }
 }
