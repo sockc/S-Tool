@@ -63,6 +63,12 @@ public class UnicomHook implements IXposedHookLoadPackage {
                         "unicom.location_privacy"
                 );
 
+        boolean universalLocationPrivacy =
+                config.isEnabled(
+                        "universal_privacy",
+                        "universal_privacy.location"
+                );
+
         XposedBridge.log(
                 TAG
                         + "联通子功能: cold="
@@ -73,6 +79,8 @@ public class UnicomHook implements IXposedHookLoadPackage {
                         + permissionPrivacy
                         + ", location="
                         + locationPrivacy
+                        + ", universalLocation="
+                        + universalLocationPrivacy
         );
 
         if (coldSplash) {
@@ -87,7 +95,8 @@ public class UnicomHook implements IXposedHookLoadPackage {
             hookPermissionPrivacy();
         }
 
-        if (locationPrivacy) {
+        if (locationPrivacy
+                && !universalLocationPrivacy) {
             hookLocationPrivacy();
         }
     }
