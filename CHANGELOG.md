@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.2
+
+### Cross-process configuration
+- Replace New XSharedPreferences as the primary configuration transport with a read-only exported ConfigProvider.
+- Store module settings in private SharedPreferences.
+- Read Hook configuration through Binder from target app processes.
+- Keep legacy XSharedPreferences as a fallback for older environments.
+- Remove the `xposedsharedprefs` declaration and lower legacy minimum API metadata to 82.
+- Update the manager status to report ConfigProvider bridge availability.
+
+### Signing
+- Allow Debug APKs to use the same fixed signing key as Release APKs when GitHub Secrets are configured.
+- Warn clearly in CI when stable signing secrets are missing and the temporary runner debug certificate is used.
+- Bump app version to `1.2.2` / versionCode `122`.
+
 ## 1.2.1
 
 ### Sub-feature controls

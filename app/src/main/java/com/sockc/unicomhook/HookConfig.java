@@ -1,25 +1,52 @@
 package com.sockc.unicomhook;
 
+import android.content.Context;
+import android.os.Bundle;
+
 import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
 
 final class HookConfig {
 
-    private static final String TAG = "S-Tool/Config: ";
-    private static final String MODULE_PACKAGE = "com.sockc.unicomhook";
+    private static final String TAG =
+            "S-Tool/Config: ";
+    private static final String MODULE_PACKAGE =
+            "com.sockc.unicomhook";
 
-    private final XSharedPreferences preferences;
-    private final boolean readable;
+    private final Bundle providerValues;
+    private final XSharedPreferences legacyPreferences;
+    private final boolean legacyReadable;
 
     private HookConfig(
-            XSharedPreferences preferences,
-            boolean readable
+            Bundle providerValues,
+            XSharedPreferences legacyPreferences,
+            boolean legacyReadable
     ) {
-        this.preferences = preferences;
-        this.readable = readable;
+        this.providerValues =
+                providerValues;
+        this.legacyPreferences =
+                legacyPreferences;
+        this.legacyReadable =
+                legacyReadable;
     }
 
     static HookConfig load() {
+        Bundle providerValues =
+                loadFromProvider();
+
+        if (providerValues != null) {
+            XposedBridge.log(
+                    TAG + "配置来源=ConfigProvider"
+            );
+
+            return new HookConfig(
+                    providerValues,
+                    null,
+                    false
+            );
+        }
+
         try {
             XSharedPreferences preferences =
                     new XSharedPreferences(
@@ -31,27 +58,105 @@ final class HookConfig {
 
             boolean readable =
                     preferences.getFile() != null
-                            && preferences.getFile().canRead();
+                            && preferences
+                            .getFile()
+                            .canRead();
 
-            if (!readable) {
+            if (readable) {
                 XposedBridge.log(
-                        TAG + "配置文件不可读，所有功能按默认开启处理"
+                        TAG + "配置来源=legacy XSharedPreferences"
+                );
+            } else {
+                XposedBridge.log(
+                        TAG + "配置桥与 legacy XSharedPreferences 均不可用，使用默认开启"
                 );
             }
 
             return new HookConfig(
+                    null,
                     preferences,
                     readable
             );
         } catch (Throwable throwable) {
             XposedBridge.log(
-                    TAG + "读取跨进程配置失败，使用默认开启: "
+                    TAG + "配置读取失败，使用默认开启: "
                             + throwable
             );
+
             return new HookConfig(
+                    null,
                     null,
                     false
             );
+        }
+    }
+
+    private static Bundle loadFromProvider() {
+        Context context =
+                findEarlyContext();
+
+        if (context == null) {
+            return null;
+        }
+
+        try {
+            Bundle result =
+                    context.getContentResolver()
+                            .call(
+                                    ConfigProvider.CONTENT_URI,
+                                    ConfigProvider.METHOD_GET_ALL,
+                                    null,
+                                    null
+                            );
+
+            if (result == null
+                    || !result.getBoolean(
+                    ConfigProvider.KEY_PROVIDER_READY,
+                    false
+            )) {
+                return null;
+            }
+
+            return result;
+        } catch (Throwable throwable) {
+            XposedBridge.log(
+                    TAG + "ConfigProvider 读取失败: "
+                            + throwable
+            );
+            return null;
+        }
+    }
+
+    private static Context findEarlyContext() {
+        try {
+            Class<?> activityThreadClass =
+                    XposedHelpers.findClass(
+                            "android.app.ActivityThread",
+                            null
+                    );
+
+            Object activityThread =
+                    XposedHelpers.callStaticMethod(
+                            activityThreadClass,
+                            "currentActivityThread"
+                    );
+
+            if (activityThread == null) {
+                return null;
+            }
+
+            Object systemContext =
+                    XposedHelpers.callMethod(
+                            activityThread,
+                            "getSystemContext"
+                    );
+
+            return systemContext
+                    instanceof Context
+                    ? (Context) systemContext
+                    : null;
+        } catch (Throwable ignored) {
+            return null;
         }
     }
 
@@ -73,12 +178,13 @@ final class HookConfig {
         if ("unicom.screenshot_privacy".equals(
                 subFeatureId
         )
-                && readable
-                && preferences != null
-                && !preferences.contains(
+                && providerValues == null
+                && legacyReadable
+                && legacyPreferences != null
+                && !legacyPreferences.contains(
                 subFeatureId
         )
-                && preferences.contains(
+                && legacyPreferences.contains(
                 "screenshot_privacy"
         )) {
             return readBoolean(
@@ -97,12 +203,21 @@ final class HookConfig {
             String key,
             boolean defaultValue
     ) {
-        if (!readable || preferences == null) {
+        if (providerValues != null
+                && providerValues.containsKey(key)) {
+            return providerValues.getBoolean(
+                    key,
+                    defaultValue
+            );
+        }
+
+        if (!legacyReadable
+                || legacyPreferences == null) {
             return defaultValue;
         }
 
         try {
-            return preferences.getBoolean(
+            return legacyPreferences.getBoolean(
                     key,
                     defaultValue
             );

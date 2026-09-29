@@ -29,35 +29,19 @@ public final class FeaturePrefs {
         }
     }
 
-    @SuppressWarnings("deprecation")
     public static OpenResult open(Context context) {
-        try {
-            SharedPreferences preferences =
-                    context.getSharedPreferences(
-                            PREF_FILE,
-                            Context.MODE_WORLD_READABLE
-                    );
+        SharedPreferences preferences =
+                context.getSharedPreferences(
+                        PREF_FILE,
+                        Context.MODE_PRIVATE
+                );
 
-            migrateLegacyPreferences(preferences);
+        migrateLegacyPreferences(preferences);
 
-            return new OpenResult(
-                    preferences,
-                    true
-            );
-        } catch (SecurityException ignored) {
-            SharedPreferences fallback =
-                    context.getSharedPreferences(
-                            PREF_FILE,
-                            Context.MODE_PRIVATE
-                    );
-
-            migrateLegacyPreferences(fallback);
-
-            return new OpenResult(
-                    fallback,
-                    false
-            );
-        }
+        return new OpenResult(
+                preferences,
+                ConfigProvider.isAvailable(context)
+        );
     }
 
     private static void migrateLegacyPreferences(
