@@ -268,12 +268,12 @@ public final class FeatureRegistry {
                     featureWithSubs(
                             "gaode",
                             "高德地图",
-                            "极简首页：保留地图、搜索与基础地图控件",
+                            "极简首页：保留地图、搜索、图层、定位、路线",
                             Arrays.asList(
                                     sub(
                                             "gaode.minimal_home",
                                             "极简首页",
-                                            "隐藏扫街榜/更多、整条底部导航以及上拉首页推荐内容，仅保留搜索",
+                                            "隐藏扫街榜/更多/运营条/3D球、整条底部导航与上拉推荐；保留搜索、图层、定位、路线",
                                             true
                                     ),
                                     sub(
