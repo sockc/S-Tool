@@ -153,7 +153,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.4.3.2 · 高德极简首页",
+                "V1.4.3.3 · 高德搜索白名单",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
