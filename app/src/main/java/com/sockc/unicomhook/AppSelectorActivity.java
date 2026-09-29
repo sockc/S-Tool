@@ -1326,11 +1326,10 @@ public final class AppSelectorActivity
         }
 
         if (pending.size() == 1) {
-            requestScopeQueue(
+            requestScopeBatch(
                     new ArrayList<>(
                             pending
-                    ),
-                    0
+                    )
             );
             return;
         }
@@ -1343,16 +1342,15 @@ public final class AppSelectorActivity
                         "已选择应用，其中 "
                                 + pending.size()
                                 + " 个尚未加入 S Tool 的 LSPosed 作用域。"
-                                + "是否按顺序发起原生作用域请求？"
+                                + "是否一次提交给 LSPosed 发起原生作用域请求？"
                 )
                 .setPositiveButton(
                         "开始请求",
                         (dialog, which) ->
-                                requestScopeQueue(
+                                requestScopeBatch(
                                         new ArrayList<>(
                                                 pending
-                                        ),
-                                        0
+                                        )
                                 )
                 )
                 .setNegativeButton(
@@ -1362,33 +1360,11 @@ public final class AppSelectorActivity
                 .show();
     }
 
-    private void requestScopeQueue(
-            List<String> packages,
-            int index
+    private void requestScopeBatch(
+            List<String> packages
     ) {
-        if (index >= packages.size()
-                || isFinishing()
-                || isDestroyed()) {
-            return;
-        }
-
-        String packageName =
-                packages.get(
-                        index
-                );
-
-        if (ScopeServiceBridge.isInScope(
-                packageName
-        )) {
-            requestScopeQueue(
-                    packages,
-                    index + 1
-            );
-            return;
-        }
-
-        ScopeServiceBridge.requestScope(
-                packageName,
+        ScopeServiceBridge.requestScopes(
+                packages,
                 (requestedPackage,
                  state,
                  message) ->
@@ -1399,25 +1375,20 @@ public final class AppSelectorActivity
                                         return;
                                     }
 
-                                    rebuildAppList();
-
                                     if (state
                                             == ScopeServiceBridge
-                                            .RequestState.APPROVED
-                                            || state
-                                            == ScopeServiceBridge
-                                            .RequestState.DENIED
-                                            || state
-                                            == ScopeServiceBridge
-                                            .RequestState.TIMEOUT
-                                            || state
-                                            == ScopeServiceBridge
-                                            .RequestState.FAILED) {
-                                        requestScopeQueue(
-                                                packages,
-                                                index + 1
-                                        );
+                                            .RequestState.FAILED
+                                            && message != null) {
+                                        Toast.makeText(
+                                                this,
+                                                message,
+                                                Toast.LENGTH_SHORT
+                                        ).show();
                                     }
+
+                                    refreshBridgeStatus();
+                                    refreshSelectedSummary();
+                                    rebuildAppList();
                                 }
                         )
         );
