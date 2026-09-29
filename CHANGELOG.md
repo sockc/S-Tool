@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.3.1
+
+### Critical Gaode splash fix
+- Restore Gaode's original `SplashScreenServiceImpl` launch/callback methods instead of short-circuiting them.
+- Stop forcing splash-state query methods to false.
+- Stop suppressing splash AJX linkage getters during startup.
+- Keep the 17.x semantic `BootBizDataPreloaderImpl.canShowSplash() = false` gate.
+- Add 16.x exact-signature compatibility for `u96.g(int,String)` and `za6.g(int,String)`: call the original method first, then set the returned finish-reason field to NO_SPLASH when compatible.
+- Observe `com.autonavi.minimap.g.e(...)` as the real splash-finish signal without altering it.
+- Preserve Gaode R3 AJX UI cleanup and structural bottom-tab handling.
+
+### Version
+- Bump app version to `1.4.3.1` / versionCode `1431`.
+
 ## 1.4.3
 
 ### Gaode R3
