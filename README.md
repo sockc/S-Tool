@@ -2,46 +2,47 @@
 
 S Tool 是一个基于 Xposed / LSPosed 的 Android 功能增强与隐私工具集合。
 
-## V1.3.2 Hook 初始化崩溃修复
+## V1.3.3 按 App 通用保护与诊断优化
 
-V1.3.2 修复 AirvoyHook 在 LSPosed/Zygote 类加载阶段创建 Handler 导致整个 SMainHook 初始化失败的问题。所有 Hook 现在延迟实例化，并在单个模块初始化失败时隔离异常，避免一个 Hook 拖死整个 S Tool。V1.3.1 的目标 Context 配置读取与真实注入诊断继续保留。
+V1.3.3 在 V1.3.2 已修复的稳定注入入口上继续收紧架构：通用隐私可以按 App 分别控制，应用增强 Hook 按包名分发，注入记录和 Hook 失败状态也更容易判断。
 
-### 通用定位保护
+### 通用隐私按 App 控制
 
-- 默认关闭，避免升级后影响已有 App。
-- 只作用于 LSPosed 已为 S Tool 勾选的目标 App。
-- 自动跳过 Android 核心进程、SystemUI、系统设置和 S Tool 自身。
-- 第一阶段覆盖 Android 原生 `LocationManager`：
-  - `getLastKnownLocation`
-  - `getCurrentLocation`
-  - `requestLocationUpdates`
-  - `requestSingleUpdate`
-- 当前模式是“阻断定位结果/请求”；Google Fused Location、厂商定位 SDK 后续再扩展。
+“通用隐私保护”仍保留总开关和两个子功能：
 
-### 通用截图隐私
+- 通用定位保护
+- 通用截图隐私
 
-- 默认跟随“通用隐私保护”总开关，升级后总开关默认关闭。
-- 阻止 Android 14+ `registerScreenCaptureCallback` 注册。
-- 阻止常见 MediaStore 图片/截图目录的 `ContentObserver` 监听。
-- 中国联通专属截图规则改为复用同一个 `ScreenshotPrivacyEngine`。
-- 当通用截图隐私已启用时，中国联通不会重复注册同类 Hook。
+展开后，每个已登记目标 App 都可以分别选择“定位”和“截图”。未选择的 App 不启用对应通用保护。
 
-### 管理界面
+从 V1.3.2 升级时，如果旧版“通用隐私保护”已经开启，V1.3.3 会把现有已登记目标 App 迁移为已选择，以保持旧版行为；如果旧版总开关关闭，则按 App 选择默认关闭。
 
-首页现在分为：
+### Hook 按包名分发
 
-- 通用保护
-- 应用增强
+应用增强 Hook 不再在每个目标进程里全部实例化。现在只有包名匹配的 Hook 才会加载，例如：
 
-“恢复默认”会恢复每个功能自己的默认状态，而不是简单把所有开关全部打开。通用隐私保护默认关闭，现有应用增强默认保持开启。
+- TikTok 进程只加载 TikTokHook
+- 中国联通进程只加载联通相关 Hook
+- 高德进程只加载 GaodeHook
+- 车300 两个已登记包名都路由到 Che300Hook
 
-## 注入与配置桥
+通用隐私和剪贴板保护属于全局型能力，仍在 LSPosed Scope 中按配置检查。
 
-`SMainHook.handleLoadPackage()` 现在只建立 `Application.attach(Context)` 入口；等目标 App 获得自己的真实 Context 后，再读取配置并安装具体 Hook。这样避免在 Application 尚未 attach 时通过 system context 读取跨进程配置。
+### 注入与失败诊断
 
-每个目标 App 成功进入 `Application.attach` 后，会向 S Tool 的 ConfigProvider 回报一次注入时间。管理页会显示“真实注入”数量，并在已安装目标旁显示“已注入 HH:mm”或“未检测到注入”。
+管理页现在区分：
 
-功能开关继续使用只读 `ConfigProvider` 作为主跨进程配置通道；legacy `XSharedPreferences` 作为兼容兜底。
+- “尚无注入记录”：更新后还没有实际启动并记录该 App，不等于故障
+- “已注入 HH:mm”：已真实进入 SMainHook / Application.attach 链路
+- “⚠ Hook失败”：该 App 对应 Hook 最近一次初始化或顶层执行发生异常
+
+顶部显示改为“已记录注入 N 个 App · 最近 App 时间”，不再用 N/总数表示健康度。
+
+运行状态卡新增“清除注入记录”，方便清空后重新启动目标 App 做验证。
+
+### 配置桥
+
+功能开关继续通过只读 ConfigProvider 跨进程读取。ConfigProvider 协议升级到 v4，并增加经过调用 UID 校验的 Hook 结果回报。
 
 ## 构建
 
@@ -61,21 +62,21 @@ gradle clean assembleDebug
 
 仓库不保存任何签名文件或密码。
 
-GitHub Debug/Release 稳定签名使用以下 Repository Secrets：
+GitHub Debug/Release 稳定签名使用：
 
 - `SIGNING_KEY_BASE64`
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS`
 - `KEY_PASSWORD`
 
-配置完成后 Debug 与 Release APK 使用同一把固定密钥，可持续覆盖升级。
+配置完成后 Debug 与 Release APK 使用同一把固定密钥，可以持续覆盖升级。
 
 ## 安全说明
 
-不要把 JKS、keystore 密码、验证码、短信正文或其他敏感信息提交到公开仓库或发布版日志。
+不要把 JKS、keystore 密码、验证码、短信正文或其他敏感信息提交到公开仓库或发布日志。
 
 > 历史版本曾提交过签名材料。旧密钥应继续视为已泄露，不再用于后续发布。
 
 ## 版本
 
-当前开发版本：V1.3.2
+当前开发版本：V1.3.3
