@@ -54,6 +54,7 @@ public final class MainActivity extends Activity {
     private TextView installedSummary;
     private TextView injectionSummary;
     private TextView changedSummary;
+    private TextView universalAppSummary;
 
     private final Map<String, Switch> switches =
             new LinkedHashMap<>();
@@ -140,7 +141,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.3.1 · 注入入口修复与诊断",
+                "V1.3.3 · 按 App 通用保护与诊断",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -208,8 +209,9 @@ public final class MainActivity extends Activity {
         }
 
         TextView footer = text(
-                "通用隐私保护默认关闭，只作用于 LSPosed 已为 S Tool 勾选的 App；"
-                        + " android、SystemUI、系统设置与 S Tool 自身会自动跳过。"
+                "通用定位与截图保护现在可按 App 分别选择；"
+                        + " 未选择的 App 不启用对应通用保护。"
+                        + " “尚无注入记录”只表示更新后还没有记录到该 App 启动。"
                         + " 修改开关后请强制停止并重新打开对应目标 App。",
                 12,
                 COLOR_SUBTEXT,
@@ -297,6 +299,29 @@ public final class MainActivity extends Activity {
         card.addView(
                 changedSummary,
                 topMargin(dp(8))
+        );
+
+        Button clearInjection =
+                actionButton("清除注入记录");
+
+        clearInjection.setOnClickListener(
+                view -> {
+                    InjectionStatus.clearAll(
+                            this
+                    );
+                    refreshSummary();
+
+                    Toast.makeText(
+                            this,
+                            "已清除注入记录",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                }
+        );
+
+        card.addView(
+                clearInjection,
+                topMargin(dp(10))
         );
 
         if (!crossProcessAvailable) {
@@ -460,9 +485,11 @@ public final class MainActivity extends Activity {
                     updateChildSwitchStates(
                             feature
                     );
+                    updateUniversalAppSwitchStates();
                     updateSubSummary(
                             feature
                     );
+                    updateUniversalAppSummary();
                     refreshSummary();
                 }
         );
@@ -553,6 +580,44 @@ public final class MainActivity extends Activity {
                 );
             }
 
+            if (FeatureRegistry.UNIVERSAL_PRIVACY.equals(
+                    feature.id
+            )) {
+                universalAppSummary = text(
+                        "",
+                        13,
+                        COLOR_ACCENT,
+                        Typeface.BOLD
+                );
+
+                childContainer.addView(
+                        universalAppSummary,
+                        topMargin(dp(14))
+                );
+
+                TextView appHint = text(
+                        "每个 App 可分别选择定位保护和截图隐私；未选择的 App 不启用通用保护。",
+                        12,
+                        COLOR_SUBTEXT,
+                        Typeface.NORMAL
+                );
+
+                childContainer.addView(
+                        appHint,
+                        topMargin(dp(5))
+                );
+
+                for (FeatureRegistry.TargetApp app
+                        : FeatureRegistry.targetApps()) {
+                    childContainer.addView(
+                            buildUniversalAppRow(
+                                    app
+                            ),
+                            topMargin(dp(8))
+                    );
+                }
+            }
+
             card.addView(
                     childContainer,
                     topMargin(dp(2))
@@ -561,9 +626,11 @@ public final class MainActivity extends Activity {
             updateChildSwitchStates(
                     feature
             );
+            updateUniversalAppSwitchStates();
             updateSubSummary(
                     feature
             );
+            updateUniversalAppSummary();
         }
 
         return card;
@@ -663,9 +730,11 @@ public final class MainActivity extends Activity {
                             isChecked
                     );
 
+                    updateUniversalAppSwitchStates();
                     updateSubSummary(
                             feature
                     );
+                    updateUniversalAppSummary();
                     refreshSummary();
                 }
         );
@@ -673,6 +742,249 @@ public final class MainActivity extends Activity {
         row.addView(childSwitch);
 
         return row;
+    }
+
+    private View buildUniversalAppRow(
+            FeatureRegistry.TargetApp app
+    ) {
+        LinearLayout row =
+                new LinearLayout(this);
+
+        row.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
+        row.setGravity(
+                Gravity.CENTER_VERTICAL
+        );
+        row.setPadding(
+                dp(12),
+                dp(9),
+                dp(8),
+                dp(9)
+        );
+
+        GradientDrawable background =
+                new GradientDrawable();
+        background.setColor(
+                COLOR_SUBCARD
+        );
+        background.setCornerRadius(
+                dp(11)
+        );
+        row.setBackground(background);
+
+        LinearLayout copy = vertical();
+
+        TextView title = text(
+                app.title,
+                14,
+                COLOR_TEXT,
+                Typeface.BOLD
+        );
+        copy.addView(title);
+
+        TextView packageText = text(
+                app.packageName,
+                11,
+                COLOR_SUBTEXT,
+                Typeface.NORMAL
+        );
+        copy.addView(
+                packageText,
+                topMargin(dp(2))
+        );
+
+        row.addView(
+                copy,
+                new LinearLayout.LayoutParams(
+                        0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        1f
+                )
+        );
+
+        LinearLayout controls = vertical();
+        controls.setGravity(
+                Gravity.END
+        );
+
+        String locationKey =
+                FeatureRegistry.universalAppKey(
+                        FeatureRegistry.UNIVERSAL_LOCATION,
+                        app.packageName
+                );
+
+        Switch locationSwitch =
+                createSwitch(
+                        locationKey,
+                        FeaturePrefs.isEnabled(
+                                preferences,
+                                locationKey
+                        )
+                );
+        locationSwitch.setText(
+                "定位"
+        );
+        locationSwitch.setTextSize(11);
+
+        locationSwitch.setOnCheckedChangeListener(
+                (buttonView, isChecked) -> {
+                    if (updatingSwitches) {
+                        return;
+                    }
+
+                    saveSwitch(
+                            locationKey,
+                            isChecked
+                    );
+                    updateUniversalAppSummary();
+                }
+        );
+
+        controls.addView(
+                locationSwitch
+        );
+
+        String screenshotKey =
+                FeatureRegistry.universalAppKey(
+                        FeatureRegistry.UNIVERSAL_SCREENSHOT,
+                        app.packageName
+                );
+
+        Switch screenshotSwitch =
+                createSwitch(
+                        screenshotKey,
+                        FeaturePrefs.isEnabled(
+                                preferences,
+                                screenshotKey
+                        )
+                );
+        screenshotSwitch.setText(
+                "截图"
+        );
+        screenshotSwitch.setTextSize(11);
+
+        screenshotSwitch.setOnCheckedChangeListener(
+                (buttonView, isChecked) -> {
+                    if (updatingSwitches) {
+                        return;
+                    }
+
+                    saveSwitch(
+                            screenshotKey,
+                            isChecked
+                    );
+                    updateUniversalAppSummary();
+                }
+        );
+
+        controls.addView(
+                screenshotSwitch
+        );
+
+        row.addView(
+                controls
+        );
+
+        return row;
+    }
+
+    private void updateUniversalAppSwitchStates() {
+        boolean parentEnabled =
+                crossProcessAvailable
+                        && FeaturePrefs.isEnabled(
+                        preferences,
+                        FeatureRegistry.UNIVERSAL_PRIVACY
+                );
+
+        boolean locationEnabled =
+                parentEnabled
+                        && FeaturePrefs.isEnabled(
+                        preferences,
+                        FeatureRegistry.UNIVERSAL_LOCATION
+                );
+
+        boolean screenshotEnabled =
+                parentEnabled
+                        && FeaturePrefs.isEnabled(
+                        preferences,
+                        FeatureRegistry.UNIVERSAL_SCREENSHOT
+                );
+
+        for (FeatureRegistry.TargetApp app
+                : FeatureRegistry.targetApps()) {
+            Switch location =
+                    switches.get(
+                            FeatureRegistry.universalAppKey(
+                                    FeatureRegistry.UNIVERSAL_LOCATION,
+                                    app.packageName
+                            )
+                    );
+
+            if (location != null) {
+                location.setEnabled(
+                        locationEnabled
+                );
+            }
+
+            Switch screenshot =
+                    switches.get(
+                            FeatureRegistry.universalAppKey(
+                                    FeatureRegistry.UNIVERSAL_SCREENSHOT,
+                                    app.packageName
+                            )
+                    );
+
+            if (screenshot != null) {
+                screenshot.setEnabled(
+                        screenshotEnabled
+                );
+            }
+        }
+    }
+
+    private void updateUniversalAppSummary() {
+        if (universalAppSummary == null) {
+            return;
+        }
+
+        int locationCount = 0;
+        int screenshotCount = 0;
+
+        for (FeatureRegistry.TargetApp app
+                : FeatureRegistry.targetApps()) {
+            String locationKey =
+                    FeatureRegistry.universalAppKey(
+                            FeatureRegistry.UNIVERSAL_LOCATION,
+                            app.packageName
+                    );
+            String screenshotKey =
+                    FeatureRegistry.universalAppKey(
+                            FeatureRegistry.UNIVERSAL_SCREENSHOT,
+                            app.packageName
+                    );
+
+            if (FeaturePrefs.isEnabled(
+                    preferences,
+                    locationKey
+            )) {
+                locationCount++;
+            }
+
+            if (FeaturePrefs.isEnabled(
+                    preferences,
+                    screenshotKey
+            )) {
+                screenshotCount++;
+            }
+        }
+
+        universalAppSummary.setText(
+                "作用应用 · 定位 "
+                        + locationCount
+                        + " · 截图 "
+                        + screenshotCount
+        );
     }
 
     private Switch createSwitch(
@@ -814,7 +1126,11 @@ public final class MainActivity extends Activity {
             FeatureRegistry.Feature feature
     ) {
         if (feature.packages.isEmpty()) {
-            return "作用范围：当前 LSPosed Scope";
+            return FeatureRegistry.UNIVERSAL_PRIVACY.equals(
+                    feature.id
+            )
+                    ? "作用范围：下方已选择 App"
+                    : "作用范围：当前 LSPosed Scope";
         }
 
         StringBuilder builder =
@@ -866,8 +1182,37 @@ public final class MainActivity extends Activity {
                 );
             } else {
                 builder.append(
-                        " · 未检测到注入"
+                        " · 尚无注入记录"
                 );
+            }
+
+            long failureAt =
+                    HookStatus.getFailureAt(
+                            this,
+                            packageName,
+                            feature.id
+                    );
+
+            if (failureAt > 0L) {
+                String failureSummary =
+                        HookStatus.getFailureSummary(
+                                this,
+                                packageName,
+                                feature.id
+                        );
+
+                builder.append(
+                        " · ⚠ Hook失败"
+                );
+
+                if (failureSummary != null
+                        && !failureSummary.trim().isEmpty()) {
+                    builder.append(
+                            "："
+                    ).append(
+                            failureSummary
+                    );
+                }
             }
         }
 
@@ -1019,6 +1364,7 @@ public final class MainActivity extends Activity {
 
         int injectedTargets = 0;
         long latestInjection = 0L;
+        String latestPackage = null;
 
         for (String packageName : targets) {
             long injectedAt =
@@ -1030,22 +1376,26 @@ public final class MainActivity extends Activity {
 
             if (injectedAt > 0L) {
                 injectedTargets++;
-                latestInjection =
-                        Math.max(
-                                latestInjection,
-                                injectedAt
-                        );
+
+                if (injectedAt > latestInjection) {
+                    latestInjection =
+                            injectedAt;
+                    latestPackage =
+                            packageName;
+                }
             }
         }
 
         injectionSummary.setText(
                 latestInjection <= 0L
-                        ? "真实注入：尚未检测到目标 App 注入"
+                        ? "注入记录：暂无 · 打开目标 App 后更新"
                         : String.format(
                         Locale.getDefault(),
-                        "真实注入：%d / %d · 最近 %s",
+                        "已记录注入：%d 个 App · 最近 %s %s",
                         injectedTargets,
-                        targets.size(),
+                        FeatureRegistry.titleForPackage(
+                                latestPackage
+                        ),
                         DateFormat
                                 .getTimeInstance(
                                         DateFormat.SHORT
@@ -1212,6 +1562,9 @@ public final class MainActivity extends Activity {
                     feature
             );
         }
+
+        updateUniversalAppSwitchStates();
+        updateUniversalAppSummary();
     }
 
     private LinearLayout vertical() {

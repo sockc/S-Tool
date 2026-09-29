@@ -209,6 +209,31 @@ final class HookConfig {
         );
     }
 
+    boolean isUniversalAppEnabled(
+            String capabilityId,
+            String packageName
+    ) {
+        if (!isEnabled(
+                FeatureRegistry.UNIVERSAL_PRIVACY,
+                capabilityId
+        )) {
+            return false;
+        }
+
+        String key =
+                FeatureRegistry.universalAppKey(
+                        capabilityId,
+                        packageName
+                );
+
+        return readBoolean(
+                key,
+                FeatureRegistry.defaultEnabled(
+                        key
+                )
+        );
+    }
+
     private boolean readBoolean(
             String key,
             boolean defaultValue

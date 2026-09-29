@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.3.3
+
+### App-scoped universal privacy
+- Add per-app selectors for Universal Location Privacy and Universal Screenshot Privacy.
+- Migrate the previous global Universal Privacy state to the registered target apps to preserve V1.3.2 behavior.
+- Keep new/reset app selections disabled by default when Universal Privacy was not previously enabled.
+
+### Hook dispatch
+- Route app-specific Hook modules by package before class instantiation.
+- Keep only global features such as Universal Privacy and Clipboard Privacy on the global dispatch path.
+- Reduce unrelated class initialization and cross-app side effects.
+
+### Diagnostics
+- Replace misleading "injected N / total" wording with a historical injection record count.
+- Show "尚无注入记录" for apps that have not been started since diagnostics were enabled.
+- Add a Clear Injection Records action.
+- Persist and display isolated top-level Hook initialization/execution failures per app/feature.
+- Clear a previous failure automatically after that Hook executes successfully again.
+- ConfigProvider protocol bumped to v4.
+
+### Version
+- Bump app version to `1.3.3` / versionCode `133`.
+
 ## 1.3.2
 
 ### Critical fix

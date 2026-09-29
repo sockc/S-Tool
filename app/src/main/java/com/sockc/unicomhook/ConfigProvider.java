@@ -23,6 +23,8 @@ public final class ConfigProvider extends ContentProvider {
             "get_all";
     public static final String METHOD_REPORT_INJECTION =
             "report_injection";
+    public static final String METHOD_REPORT_HOOK_RESULT =
+            "report_hook_result";
 
     public static final String KEY_PROTOCOL_VERSION =
             "_protocol_version";
@@ -32,10 +34,16 @@ public final class ConfigProvider extends ContentProvider {
             "_package_name";
     public static final String KEY_PROCESS_NAME =
             "_process_name";
+    public static final String KEY_FEATURE_ID =
+            "_feature_id";
+    public static final String KEY_SUCCESS =
+            "_success";
+    public static final String KEY_SUMMARY =
+            "_summary";
     public static final String KEY_RECORDED =
             "_recorded";
 
-    public static final int PROTOCOL_VERSION = 3;
+    public static final int PROTOCOL_VERSION = 4;
 
     @Override
     public boolean onCreate() {
@@ -71,6 +79,12 @@ public final class ConfigProvider extends ContentProvider {
             );
         }
 
+        if (METHOD_REPORT_HOOK_RESULT.equals(method)) {
+            return recordHookResult(
+                    extras
+            );
+        }
+
         return super.call(
                 method,
                 arg,
@@ -90,6 +104,10 @@ public final class ConfigProvider extends ContentProvider {
                         FeaturePrefs.PREF_FILE,
                         Context.MODE_PRIVATE
                 );
+
+        FeaturePrefs.migrateUniversalAppSelections(
+                preferences
+        );
 
         Bundle result = new Bundle();
 
@@ -184,6 +202,70 @@ public final class ConfigProvider extends ContentProvider {
         return result;
     }
 
+    private Bundle recordHookResult(
+            Bundle extras
+    ) {
+        Bundle result = new Bundle();
+        result.putBoolean(
+                KEY_RECORDED,
+                false
+        );
+
+        Context context = getContext();
+
+        if (context == null
+                || extras == null) {
+            return result;
+        }
+
+        String packageName =
+                extras.getString(
+                        KEY_PACKAGE_NAME
+                );
+        String featureId =
+                extras.getString(
+                        KEY_FEATURE_ID
+                );
+
+        if (featureId == null
+                || !callerOwnsPackage(
+                context,
+                packageName
+        )) {
+            return result;
+        }
+
+        boolean success =
+                extras.getBoolean(
+                        KEY_SUCCESS,
+                        false
+                );
+
+        if (success) {
+            HookStatus.clearFailure(
+                    context,
+                    packageName,
+                    featureId
+            );
+        } else {
+            HookStatus.recordFailure(
+                    context,
+                    packageName,
+                    featureId,
+                    extras.getString(
+                            KEY_SUMMARY
+                    )
+            );
+        }
+
+        result.putBoolean(
+                KEY_RECORDED,
+                true
+        );
+
+        return result;
+    }
+
     private boolean callerOwnsPackage(
             Context context,
             String packageName
@@ -267,6 +349,57 @@ public final class ConfigProvider extends ContentProvider {
                             .call(
                                     CONTENT_URI,
                                     METHOD_REPORT_INJECTION,
+                                    null,
+                                    extras
+                            );
+
+            return result != null
+                    && result.getBoolean(
+                    KEY_RECORDED,
+                    false
+            );
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static boolean reportHookResult(
+            Context context,
+            String packageName,
+            String featureId,
+            boolean success,
+            String summary
+    ) {
+        if (context == null
+                || packageName == null
+                || featureId == null) {
+            return false;
+        }
+
+        try {
+            Bundle extras = new Bundle();
+            extras.putString(
+                    KEY_PACKAGE_NAME,
+                    packageName
+            );
+            extras.putString(
+                    KEY_FEATURE_ID,
+                    featureId
+            );
+            extras.putBoolean(
+                    KEY_SUCCESS,
+                    success
+            );
+            extras.putString(
+                    KEY_SUMMARY,
+                    summary
+            );
+
+            Bundle result =
+                    context.getContentResolver()
+                            .call(
+                                    CONTENT_URI,
+                                    METHOD_REPORT_HOOK_RESULT,
                                     null,
                                     extras
                             );
