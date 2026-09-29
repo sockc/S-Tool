@@ -27,11 +27,16 @@ android {
         applicationId "com.sockc.unicomhook"
         minSdk 24
         targetSdk 34
-        versionCode 121
-        versionName "1.2.1"
+        versionCode 122
+        versionName "1.2.2"
     }
 
     buildTypes {
+        debug {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
         release {
             minifyEnabled false
             if (hasReleaseSigning) {
