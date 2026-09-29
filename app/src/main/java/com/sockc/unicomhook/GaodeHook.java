@@ -120,6 +120,14 @@ public class GaodeHook implements HookModule {
                         + floatBadgesEnabled
         );
 
+        GaodeR3Engine.install(
+                lpparam.classLoader,
+                adSkipEnabled,
+                exploreLocalEnabled,
+                bottomTabsEnabled,
+                floatBadgesEnabled
+        );
+
         XposedHelpers.findAndHookMethod(
                 Activity.class,
                 "onCreate",
@@ -268,6 +276,13 @@ public class GaodeHook implements HookModule {
                 activity,
                 root
         );
+
+        if (bottomTabsEnabled) {
+            GaodeR3Engine.applyBottomTabs(
+                    activity,
+                    root
+            );
+        }
 
         if (adSkipEnabled) {
             scanAndClickSkip(root);
