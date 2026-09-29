@@ -268,27 +268,19 @@ public final class FeatureRegistry {
                     featureWithSubs(
                             "gaode",
                             "高德地图",
-                            "首页净化与广告处理",
+                            "极简首页：保留地图、搜索与基础地图控件",
                             Arrays.asList(
                                     sub(
+                                            "gaode.minimal_home",
+                                            "极简首页",
+                                            "隐藏扫街榜/更多、整条底部导航以及上拉首页推荐内容，仅保留搜索",
+                                            true
+                                    ),
+                                    sub(
                                             "gaode.ad_skip",
-                                            "广告跳过",
-                                            "识别“跳过/关闭广告”按钮并自动点击"
-                                    ),
-                                    sub(
-                                            "gaode.explore_local",
-                                            "隐藏探索本地",
-                                            "隐藏首页“探索本地”整块内容"
-                                    ),
-                                    sub(
-                                            "gaode.bottom_tabs",
-                                            "精简底部导航",
-                                            "隐藏探索、AI 对话、路线等指定入口"
-                                    ),
-                                    sub(
-                                            "gaode.float_badges",
-                                            "隐藏运营挂件",
-                                            "隐藏扫街榜、订周末等右侧运营挂件"
+                                            "广告跳过（实验性）",
+                                            "仅点击已经显示的“跳过/关闭广告”按钮，不修改高德启动状态机",
+                                            false
                                     )
                             ),
                             "com.autonavi.minimap"
