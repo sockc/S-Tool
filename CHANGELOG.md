@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.3.4
+
+### Universal protection menu
+- Replace the large inline Universal Privacy card with two compact menu entries: Location Privacy and Screenshot Privacy.
+- Show enabled/disabled state and selected-app count directly on each menu card.
+- Move app selection to a dedicated screen.
+
+### Arbitrary app selector
+- Scan installed applications and allow privacy protection for apps without a dedicated S Tool enhancement module.
+- Add search by app label or package name.
+- Hide system apps by default with an optional “显示系统应用” switch.
+- Add “全选当前” and “清空” actions.
+- Show per-app LSPosed injection history inside the selector.
+- Permanently exclude Android core, SystemUI, Settings, and S Tool itself.
+- Add `QUERY_ALL_PACKAGES` for complete installed-app discovery in the current sideload/self-use workflow.
+
+### Dynamic configuration
+- Universal privacy app keys are now dynamic instead of limited to the registered enhancement-app list.
+- ConfigProvider publishes all saved dynamic app privacy keys.
+- Preserve V1.3.3 selections during upgrade.
+- Reset Defaults clears dynamic app selections.
+- ConfigProvider protocol bumped to v5.
+
+### Version
+- Bump app version to `1.3.4` / versionCode `134`.
+
 ## 1.3.3
 
 ### App-scoped universal privacy
