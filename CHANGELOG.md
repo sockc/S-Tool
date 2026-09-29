@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.4.3.3
+
+### Gaode search whitelist
+- Preserve map, search, Layers, Location and Route controls.
+- Fix bottom-navigation detection so it cannot hide the larger parent containing the search bar.
+- Add a hard search-branch guard before hiding any Gaode UI container.
+- Hide top reward/promotion banners such as “题题有奖励 / 奖金天天见”.
+- Hide Scan Street Ranking, More and other non-whitelisted small home overlays.
+- Hide lower-middle non-whitelisted floating controls such as the 3D globe.
+- Keep expanded-home trimming limited to the discovery panel while preserving search.
+- Keep the UI-only splash-safe architecture from V1.4.3.2.
+
+### Version
+- Bump app version to `1.4.3.3` / versionCode `1433`.
+
 ## 1.4.3.2
 
 ### Gaode minimal home
