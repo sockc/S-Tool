@@ -39,26 +39,58 @@ final class HookConfig {
                 );
             }
 
-            return new HookConfig(preferences, readable);
+            return new HookConfig(
+                    preferences,
+                    readable
+            );
         } catch (Throwable throwable) {
             XposedBridge.log(
                     TAG + "读取跨进程配置失败，使用默认开启: "
                             + throwable
             );
-            return new HookConfig(null, false);
+            return new HookConfig(
+                    null,
+                    false
+            );
         }
     }
 
     boolean isEnabled(String featureId) {
-        return readBoolean(featureId, true);
+        return readBoolean(
+                featureId,
+                true
+        );
     }
 
     boolean isEnabled(
             String featureId,
             String subFeatureId
     ) {
-        return isEnabled(featureId)
-                && readBoolean(subFeatureId, true);
+        if (!isEnabled(featureId)) {
+            return false;
+        }
+
+        if ("unicom.screenshot_privacy".equals(
+                subFeatureId
+        )
+                && readable
+                && preferences != null
+                && !preferences.contains(
+                subFeatureId
+        )
+                && preferences.contains(
+                "screenshot_privacy"
+        )) {
+            return readBoolean(
+                    "screenshot_privacy",
+                    true
+            );
+        }
+
+        return readBoolean(
+                subFeatureId,
+                true
+        );
     }
 
     private boolean readBoolean(
@@ -70,7 +102,10 @@ final class HookConfig {
         }
 
         try {
-            return preferences.getBoolean(key, defaultValue);
+            return preferences.getBoolean(
+                    key,
+                    defaultValue
+            );
         } catch (Throwable throwable) {
             XposedBridge.log(
                     TAG + "读取 " + key + " 失败，使用默认值: "
