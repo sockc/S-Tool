@@ -39,29 +39,79 @@ final class HookConfig {
                 );
             }
 
-            return new HookConfig(preferences, readable);
+            return new HookConfig(
+                    preferences,
+                    readable
+            );
         } catch (Throwable throwable) {
             XposedBridge.log(
                     TAG + "读取跨进程配置失败，使用默认开启: "
                             + throwable
             );
-            return new HookConfig(null, false);
+            return new HookConfig(
+                    null,
+                    false
+            );
         }
     }
 
     boolean isEnabled(String featureId) {
+        return readBoolean(
+                featureId,
+                true
+        );
+    }
+
+    boolean isEnabled(
+            String featureId,
+            String subFeatureId
+    ) {
+        if (!isEnabled(featureId)) {
+            return false;
+        }
+
+        if ("unicom.screenshot_privacy".equals(
+                subFeatureId
+        )
+                && readable
+                && preferences != null
+                && !preferences.contains(
+                subFeatureId
+        )
+                && preferences.contains(
+                "screenshot_privacy"
+        )) {
+            return readBoolean(
+                    "screenshot_privacy",
+                    true
+            );
+        }
+
+        return readBoolean(
+                subFeatureId,
+                true
+        );
+    }
+
+    private boolean readBoolean(
+            String key,
+            boolean defaultValue
+    ) {
         if (!readable || preferences == null) {
-            return true;
+            return defaultValue;
         }
 
         try {
-            return preferences.getBoolean(featureId, true);
+            return preferences.getBoolean(
+                    key,
+                    defaultValue
+            );
         } catch (Throwable throwable) {
             XposedBridge.log(
-                    TAG + "读取 " + featureId + " 失败，按开启处理: "
+                    TAG + "读取 " + key + " 失败，使用默认值: "
                             + throwable
             );
-            return true;
+            return defaultValue;
         }
     }
 }
