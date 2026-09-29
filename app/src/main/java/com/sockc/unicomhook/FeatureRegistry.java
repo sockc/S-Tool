@@ -11,15 +11,18 @@ public final class FeatureRegistry {
         public final String id;
         public final String title;
         public final String summary;
+        public final boolean defaultEnabled;
 
         private SubFeature(
                 String id,
                 String title,
-                String summary
+                String summary,
+                boolean defaultEnabled
         ) {
             this.id = id;
             this.title = title;
             this.summary = summary;
+            this.defaultEnabled = defaultEnabled;
         }
     }
 
@@ -27,6 +30,7 @@ public final class FeatureRegistry {
         public final String id;
         public final String title;
         public final String summary;
+        public final boolean defaultEnabled;
         public final List<String> packages;
         public final List<SubFeature> subFeatures;
 
@@ -34,12 +38,14 @@ public final class FeatureRegistry {
                 String id,
                 String title,
                 String summary,
+                boolean defaultEnabled,
                 List<SubFeature> subFeatures,
                 String... packages
         ) {
             this.id = id;
             this.title = title;
             this.summary = summary;
+            this.defaultEnabled = defaultEnabled;
             this.packages = Collections.unmodifiableList(
                     Arrays.asList(packages)
             );
@@ -54,7 +60,26 @@ public final class FeatureRegistry {
             String title,
             String summary
     ) {
-        return new SubFeature(id, title, summary);
+        return sub(
+                id,
+                title,
+                summary,
+                true
+        );
+    }
+
+    private static SubFeature sub(
+            String id,
+            String title,
+            String summary,
+            boolean defaultEnabled
+    ) {
+        return new SubFeature(
+                id,
+                title,
+                summary,
+                defaultEnabled
+        );
     }
 
     private static Feature feature(
@@ -67,6 +92,7 @@ public final class FeatureRegistry {
                 id,
                 title,
                 summary,
+                true,
                 Collections.<SubFeature>emptyList(),
                 packages
         );
@@ -83,6 +109,25 @@ public final class FeatureRegistry {
                 id,
                 title,
                 summary,
+                true,
+                subFeatures,
+                packages
+        );
+    }
+
+    private static Feature featureWithSubs(
+            String id,
+            String title,
+            String summary,
+            boolean defaultEnabled,
+            List<SubFeature> subFeatures,
+            String... packages
+    ) {
+        return new Feature(
+                id,
+                title,
+                summary,
+                defaultEnabled,
                 subFeatures,
                 packages
         );
@@ -90,6 +135,24 @@ public final class FeatureRegistry {
 
     private static final List<Feature> FEATURES =
             Collections.unmodifiableList(Arrays.asList(
+                    featureWithSubs(
+                            "universal_privacy",
+                            "通用隐私保护",
+                            "作用于 LSPosed 已勾选的目标 App；升级后默认关闭",
+                            false,
+                            Arrays.asList(
+                                    sub(
+                                            "universal_privacy.location",
+                                            "通用定位保护",
+                                            "阻断 Android 原生最近定位、当前定位与持续定位请求"
+                                    ),
+                                    sub(
+                                            "universal_privacy.screenshot",
+                                            "通用截图隐私",
+                                            "阻止 Android 14+ 截图回调注册与常见媒体库截图监听"
+                                    )
+                            )
+                    ),
                     featureWithSubs(
                             "unicom",
                             "中国联通",
@@ -319,5 +382,21 @@ public final class FeatureRegistry {
         }
 
         return keys;
+    }
+
+    public static boolean defaultEnabled(String key) {
+        for (Feature feature : FEATURES) {
+            if (feature.id.equals(key)) {
+                return feature.defaultEnabled;
+            }
+
+            for (SubFeature subFeature : feature.subFeatures) {
+                if (subFeature.id.equals(key)) {
+                    return subFeature.defaultEnabled;
+                }
+            }
+        }
+
+        return true;
     }
 }

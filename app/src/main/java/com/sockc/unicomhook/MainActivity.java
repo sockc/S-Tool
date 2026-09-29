@@ -127,7 +127,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.2.2 · 稳定配置桥与固定签名",
+                "V1.3.0 · 通用隐私引擎",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -157,12 +157,37 @@ public final class MainActivity extends Activity {
         );
 
         root.addView(
-                sectionTitle("功能模块"),
+                sectionTitle("通用保护"),
                 topMargin(dp(24))
         );
 
         for (FeatureRegistry.Feature feature
                 : FeatureRegistry.all()) {
+            if (!"universal_privacy".equals(
+                    feature.id
+            )) {
+                continue;
+            }
+
+            root.addView(
+                    buildFeatureCard(feature),
+                    topMargin(dp(10))
+            );
+        }
+
+        root.addView(
+                sectionTitle("应用增强"),
+                topMargin(dp(24))
+        );
+
+        for (FeatureRegistry.Feature feature
+                : FeatureRegistry.all()) {
+            if ("universal_privacy".equals(
+                    feature.id
+            )) {
+                continue;
+            }
+
             root.addView(
                     buildFeatureCard(feature),
                     topMargin(dp(10))
@@ -170,10 +195,9 @@ public final class MainActivity extends Activity {
         }
 
         TextView footer = text(
-                "总开关关闭时会停止整个模块，子功能原设置会保留。"
-                        + " 配置通过只读 ConfigProvider 跨进程读取；"
-                        + " 修改开关后请强制停止并重新打开对应目标 App。"
-                        + " 配置桥读取失败时 Hook 默认开启，避免升级后功能意外失效。",
+                "通用隐私保护默认关闭，只作用于 LSPosed 已为 S Tool 勾选的 App；"
+                        + " android、SystemUI、系统设置与 S Tool 自身会自动跳过。"
+                        + " 修改开关后请强制停止并重新打开对应目标 App。",
                 12,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -1040,9 +1064,13 @@ public final class MainActivity extends Activity {
         updatingSwitches = true;
 
         try {
-            for (Switch toggle
-                    : switches.values()) {
-                toggle.setChecked(true);
+            for (Map.Entry<String, Switch> entry
+                    : switches.entrySet()) {
+                entry.getValue().setChecked(
+                        FeatureRegistry.defaultEnabled(
+                                entry.getKey()
+                        )
+                );
             }
         } finally {
             updatingSwitches = false;
@@ -1053,7 +1081,7 @@ public final class MainActivity extends Activity {
 
         Toast.makeText(
                 this,
-                "已恢复默认：总开关与子功能全部开启",
+                "已恢复默认设置",
                 Toast.LENGTH_SHORT
         ).show();
     }

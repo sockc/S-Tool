@@ -68,7 +68,7 @@ final class HookConfig {
                 );
             } else {
                 XposedBridge.log(
-                        TAG + "配置桥与 legacy XSharedPreferences 均不可用，使用默认开启"
+                        TAG + "配置桥与 legacy XSharedPreferences 均不可用，使用功能默认值"
                 );
             }
 
@@ -79,7 +79,7 @@ final class HookConfig {
             );
         } catch (Throwable throwable) {
             XposedBridge.log(
-                    TAG + "配置读取失败，使用默认开启: "
+                    TAG + "配置读取失败，使用功能默认值: "
                             + throwable
             );
 
@@ -163,7 +163,9 @@ final class HookConfig {
     boolean isEnabled(String featureId) {
         return readBoolean(
                 featureId,
-                true
+                FeatureRegistry.defaultEnabled(
+                        featureId
+                )
         );
     }
 
@@ -189,13 +191,17 @@ final class HookConfig {
         )) {
             return readBoolean(
                     "screenshot_privacy",
-                    true
+                    FeatureRegistry.defaultEnabled(
+                            subFeatureId
+                    )
             );
         }
 
         return readBoolean(
                 subFeatureId,
-                true
+                FeatureRegistry.defaultEnabled(
+                        subFeatureId
+                )
         );
     }
 
