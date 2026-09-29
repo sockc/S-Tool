@@ -1480,27 +1480,46 @@ public final class MainActivity extends Activity {
 
         for (FeatureRegistry.Feature feature
                 : FeatureRegistry.all()) {
+            boolean universal =
+                    FeatureRegistry.UNIVERSAL_PRIVACY.equals(
+                            feature.id
+                    );
+
             boolean masterEnabled =
                     FeaturePrefs.isEnabled(
                             preferences,
                             feature.id
                     );
 
-            if (masterEnabled) {
-                enabledModules++;
-            }
+            boolean anyUniversalEnabled =
+                    false;
 
             for (FeatureRegistry.SubFeature subFeature
                     : feature.subFeatures) {
                 totalSubFeatures++;
 
-                if (masterEnabled
-                        && FeaturePrefs.isEnabled(
-                        preferences,
-                        subFeature.id
-                )) {
+                boolean childEnabled =
+                        FeaturePrefs.isEnabled(
+                                preferences,
+                                subFeature.id
+                        );
+
+                if (universal) {
+                    if (childEnabled) {
+                        enabledSubFeatures++;
+                        anyUniversalEnabled =
+                                true;
+                    }
+                } else if (masterEnabled
+                        && childEnabled) {
                     enabledSubFeatures++;
                 }
+            }
+
+            if (universal
+                    ? anyUniversalEnabled
+                    : masterEnabled) {
+                enabledModules++;
             }
 
             targets.addAll(
