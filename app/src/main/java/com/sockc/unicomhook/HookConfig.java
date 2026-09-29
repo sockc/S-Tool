@@ -50,18 +50,33 @@ final class HookConfig {
     }
 
     boolean isEnabled(String featureId) {
+        return readBoolean(featureId, true);
+    }
+
+    boolean isEnabled(
+            String featureId,
+            String subFeatureId
+    ) {
+        return isEnabled(featureId)
+                && readBoolean(subFeatureId, true);
+    }
+
+    private boolean readBoolean(
+            String key,
+            boolean defaultValue
+    ) {
         if (!readable || preferences == null) {
-            return true;
+            return defaultValue;
         }
 
         try {
-            return preferences.getBoolean(featureId, true);
+            return preferences.getBoolean(key, defaultValue);
         } catch (Throwable throwable) {
             XposedBridge.log(
-                    TAG + "读取 " + featureId + " 失败，按开启处理: "
+                    TAG + "读取 " + key + " 失败，使用默认值: "
                             + throwable
             );
-            return true;
+            return defaultValue;
         }
     }
 }
