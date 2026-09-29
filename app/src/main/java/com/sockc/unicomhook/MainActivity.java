@@ -90,6 +90,8 @@ public final class MainActivity extends Activity {
                         View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
                 );
 
+        ScopeServiceBridge.initialize();
+
         FeaturePrefs.OpenResult openResult =
                 FeaturePrefs.open(this);
 
@@ -146,7 +148,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.4.0 · 通用隐私第二阶段",
+                "V1.4.1 · 原生 Scope 请求与选择器优化",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
