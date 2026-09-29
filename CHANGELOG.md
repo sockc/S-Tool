@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.3.2
+
+### Gaode minimal home
+- Replace the old Explore/Bottom-tabs/Floating-badges switches with one `gaode.minimal_home` mode.
+- Keep map, native search and basic map controls.
+- Hide the right-side Scan Street Ranking entry.
+- Hide the right-side More entry.
+- Hide the complete bottom navigation row instead of hiding individual tabs.
+- When the expanded home panel contains the tool grid / home channels, preserve the search-bar branch and hide sibling home-discovery content.
+- Keep AJX text anchors available for Gaode UI recognition.
+
+### Splash safety
+- GaodeHook no longer installs any R3 semantic splash/startup hooks.
+- Experimental ad skip is visual-only: it clicks a visible skip/close-ad button after UI exists.
+- Migrate existing users by disabling `gaode.ad_skip` once on upgrade.
+- Remove saved legacy Gaode child switches to prevent hidden old rules from remaining active.
+
+### Config
+- ConfigProvider protocol bumped to v7.
+
+### Version
+- Bump app version to `1.4.3.2` / versionCode `1432`.
+
 ## 1.4.3.1
 
 ### Critical Gaode splash fix
