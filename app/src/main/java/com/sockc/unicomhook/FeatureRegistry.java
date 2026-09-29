@@ -23,6 +23,10 @@ public final class FeatureRegistry {
             "universal_privacy.file_media";
     public static final String UNIVERSAL_APP_LIST =
             "universal_privacy.app_list";
+    public static final String UNIVERSAL_TOOLS =
+            "universal_tools";
+    public static final String UNIVERSAL_SPLASH_SKIP =
+            "universal_tools.splash_skip";
 
     public static final String LOCATION_APP_PREFIX =
             "universal_privacy.location.app.";
@@ -36,6 +40,8 @@ public final class FeatureRegistry {
             "universal_privacy.file_media.app.";
     public static final String APP_LIST_APP_PREFIX =
             "universal_privacy.app_list.app.";
+    public static final String SPLASH_SKIP_APP_PREFIX =
+            "universal_tools.splash_skip.app.";
 
     private static final List<String> UNIVERSAL_CAPABILITIES =
             Collections.unmodifiableList(Arrays.asList(
@@ -44,7 +50,8 @@ public final class FeatureRegistry {
                     UNIVERSAL_CLIPBOARD,
                     UNIVERSAL_DEVICE_ID,
                     UNIVERSAL_FILE_MEDIA,
-                    UNIVERSAL_APP_LIST
+                    UNIVERSAL_APP_LIST,
+                    UNIVERSAL_SPLASH_SKIP
             ));
 
     public static final class SubFeature {
@@ -228,6 +235,20 @@ public final class FeatureRegistry {
                                             UNIVERSAL_APP_LIST,
                                             "应用列表保护",
                                             "限制批量枚举已安装应用和软件包",
+                                            false
+                                    )
+                            )
+                    ),
+                    featureWithSubs(
+                            UNIVERSAL_TOOLS,
+                            "通用功能",
+                            "按 App 选择的通用增强能力",
+                            true,
+                            Arrays.asList(
+                                    sub(
+                                            UNIVERSAL_SPLASH_SKIP,
+                                            "通用开屏广告跳过",
+                                            "冷启动前 10 秒仅扫描可见 UI，高置信度识别后执行一次原生点击",
                                             false
                                     )
                             )
@@ -453,12 +474,7 @@ public final class FeatureRegistry {
     public static String universalCapabilityTitle(
             String capabilityId
     ) {
-        Feature feature =
-                findFeature(
-                        UNIVERSAL_PRIVACY
-                );
-
-        if (feature != null) {
+        for (Feature feature : FEATURES) {
             for (SubFeature subFeature
                     : feature.subFeatures) {
                 if (subFeature.id.equals(
@@ -475,12 +491,7 @@ public final class FeatureRegistry {
     public static String universalCapabilitySummary(
             String capabilityId
     ) {
-        Feature feature =
-                findFeature(
-                        UNIVERSAL_PRIVACY
-                );
-
-        if (feature != null) {
+        for (Feature feature : FEATURES) {
             for (SubFeature subFeature
                     : feature.subFeatures) {
                 if (subFeature.id.equals(
@@ -616,6 +627,12 @@ public final class FeatureRegistry {
                 capabilityId
         )) {
             return APP_LIST_APP_PREFIX;
+        }
+
+        if (UNIVERSAL_SPLASH_SKIP.equals(
+                capabilityId
+        )) {
+            return SPLASH_SKIP_APP_PREFIX;
         }
 
         return LOCATION_APP_PREFIX;
