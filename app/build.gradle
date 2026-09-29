@@ -27,8 +27,8 @@ android {
         applicationId "com.sockc.unicomhook"
         minSdk 26
         targetSdk 34
-        versionCode 1431
-        versionName "1.4.3.1"
+        versionCode 1432
+        versionName "1.4.3.2"
     }
 
     buildTypes {
