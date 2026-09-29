@@ -43,7 +43,7 @@ public final class ConfigProvider extends ContentProvider {
     public static final String KEY_RECORDED =
             "_recorded";
 
-    public static final int PROTOCOL_VERSION = 4;
+    public static final int PROTOCOL_VERSION = 5;
 
     @Override
     public boolean onCreate() {
@@ -148,6 +148,24 @@ public final class ConfigProvider extends ContentProvider {
                     key,
                     value
             );
+        }
+
+        for (java.util.Map.Entry<String, ?> entry
+                : preferences.getAll().entrySet()) {
+            String key =
+                    entry.getKey();
+            Object value =
+                    entry.getValue();
+
+            if (FeatureRegistry.isUniversalAppKey(
+                    key
+            )
+                    && value instanceof Boolean) {
+                result.putBoolean(
+                        key,
+                        (Boolean) value
+                );
+            }
         }
 
         result.putLong(
