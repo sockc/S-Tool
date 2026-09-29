@@ -77,7 +77,9 @@ public final class FeaturePrefs {
     ) {
         return preferences.getBoolean(
                 featureId,
-                true
+                FeatureRegistry.defaultEnabled(
+                        featureId
+                )
         );
     }
 
