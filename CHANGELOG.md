@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.3.0
+
+### Universal privacy
+- Add a new top-level Universal Privacy module, disabled by default.
+- Add reusable `LocationPrivacyEngine`.
+- Protect Android `LocationManager` last/current/continuous/single location entry points.
+- Add reusable `ScreenshotPrivacyEngine`.
+- Block Android 14+ screen-capture callback registration.
+- Block common MediaStore screenshot/image observers.
+- Skip Android core, SystemUI, Settings and S Tool itself.
+- Apply universal privacy only to apps/processes already selected in LSPosed scope.
+
+### Compatibility
+- Reuse the screenshot engine for the existing China Unicom screenshot privacy feature.
+- Avoid duplicate China Unicom screenshot/location hooks when the corresponding universal protection is active.
+- Add per-feature default state support so new broad protections can safely default off.
+- ConfigProvider protocol bumped to v2.
+
+### UI
+- Split the manager into Universal Protection and App Enhancements sections.
+- Restore Defaults now respects each feature's declared default state.
+
+### Version
+- Bump app version to `1.3.0` / versionCode `130`.
+
 ## 1.2.2
 
 ### Cross-process configuration
