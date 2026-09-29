@@ -2,27 +2,42 @@
 
 S Tool 是一个基于 Xposed / LSPosed 的 Android 功能增强与隐私工具集合。
 
-## V1.2.2 配置与签名稳定性
+## V1.3 通用隐私引擎
 
-V1.2.2 解决跨进程配置和 APK 签名稳定性问题，同时保留 V1.2.1 的分层子功能控制：
+V1.3.0 开始把可复用的隐私能力从单个 App Hook 中抽离出来。
 
-- 查看跨进程配置是否可用
-- 查看已启用 Hook 数量
-- 查看目标 App 安装状态和版本
-- 每个 Hook 独立总开关
-- 中国联通、高德、淘宝、美团、拼多多支持展开子功能逐项控制
-- 总开关关闭时保留子功能原设置
-- 全部开启 / 全部关闭 / 恢复默认
-- 修改时间诊断
-- 关闭某项后，重启对应目标 App 即生效
+### 通用定位保护
 
-功能开关现在以只读 `ConfigProvider` 作为主跨进程通道。模块 UI 只把设置写在自己的私有 SharedPreferences 中；目标 App 里的 Hook 通过 Binder 读取配置，不再依赖 `MODE_WORLD_READABLE`。legacy `XSharedPreferences` 仅作为旧环境兼容兜底。
+- 默认关闭，避免升级后影响已有 App。
+- 只作用于 LSPosed 已为 S Tool 勾选的目标 App。
+- 自动跳过 Android 核心进程、SystemUI、系统设置和 S Tool 自身。
+- 第一阶段覆盖 Android 原生 `LocationManager`：
+  - `getLastKnownLocation`
+  - `getCurrentLocation`
+  - `requestLocationUpdates`
+  - `requestSingleUpdate`
+- 当前模式是“阻断定位结果/请求”；Google Fused Location、厂商定位 SDK 后续再扩展。
 
-为避免配置桥临时不可用导致现有功能突然失效，Hook 读取不到任何配置通道时默认保持开启。
+### 通用截图隐私
 
-## 架构
+- 默认跟随“通用隐私保护”总开关，升级后总开关默认关闭。
+- 阻止 Android 14+ `registerScreenCaptureCallback` 注册。
+- 阻止常见 MediaStore 图片/截图目录的 `ContentObserver` 监听。
+- 中国联通专属截图规则改为复用同一个 `ScreenshotPrivacyEngine`。
+- 当通用截图隐私已启用时，中国联通不会重复注册同类 Hook。
 
-V1.1 起使用单一 Xposed 入口 `SMainHook`。V1.2 加入 `HookConfig`；V1.2.1 支持父子级配置；V1.2.2 将配置主通道迁移到 `ConfigProvider`，避免新 Android/LSPosed 环境下 legacy New XSharedPreferences 失效。
+### 管理界面
+
+首页现在分为：
+
+- 通用保护
+- 应用增强
+
+“恢复默认”会恢复每个功能自己的默认状态，而不是简单把所有开关全部打开。通用隐私保护默认关闭，现有应用增强默认保持开启。
+
+## 配置桥
+
+功能开关使用 V1.2.2 引入的只读 `ConfigProvider` 作为主跨进程配置通道。模块 UI 将设置保存在自己的私有 SharedPreferences，目标 App Hook 通过 Binder 读取配置。legacy `XSharedPreferences` 继续作为兼容兜底。
 
 ## 构建
 
@@ -42,21 +57,21 @@ gradle clean assembleDebug
 
 仓库不保存任何签名文件或密码。
 
-GitHub Debug/Release 稳定签名需要在仓库 Secrets 中配置：
+GitHub Debug/Release 稳定签名使用以下 Repository Secrets：
 
 - `SIGNING_KEY_BASE64`
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS`
 - `KEY_PASSWORD`
 
-配置 Secrets 后，GitHub Actions 的 Debug APK 与 Release APK 都使用同一把固定密钥。创建 `v*` Tag 后还会生成 SHA256 并创建 GitHub Release。首次切换到这把新密钥时，旧 APK 若签名不同，需要卸载一次；之后可直接覆盖更新。
+配置完成后 Debug 与 Release APK 使用同一把固定密钥，可持续覆盖升级。
 
 ## 安全说明
 
-不要把 JKS、keystore 密码、验证码、短信正文或其他敏感信息提交到公开仓库或写入发布版日志。
+不要把 JKS、keystore 密码、验证码、短信正文或其他敏感信息提交到公开仓库或发布版日志。
 
-> 历史版本曾提交过签名材料。仅从当前分支删除文件不能清除 Git 历史中的旧对象，应视旧密钥为已泄露并更换新签名密钥。
+> 历史版本曾提交过签名材料。旧密钥应继续视为已泄露，不再用于后续发布。
 
 ## 版本
 
-当前开发版本：V1.2.2
+当前开发版本：V1.3.0
