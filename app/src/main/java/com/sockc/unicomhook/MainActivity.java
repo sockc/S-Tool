@@ -259,25 +259,30 @@ public final class MainActivity extends Activity {
         );
 
         root.addView(
+                sectionTitle("短信增强"),
+                topMargin(dp(24))
+        );
+        for (String id : new String[]{"sms_sender", "sms_code"}) {
+            FeatureRegistry.Feature smsFeature = FeatureRegistry.findFeature(id);
+            if (smsFeature != null) {
+                root.addView(buildFeatureCard(smsFeature), topMargin(dp(10)));
+            }
+        }
+
+        root.addView(
                 sectionTitle("应用增强"),
                 topMargin(dp(24))
         );
 
         for (FeatureRegistry.Feature feature
                 : FeatureRegistry.all()) {
-            if (FeatureRegistry.UNIVERSAL_PRIVACY.equals(
-                    feature.id
-            )
-                    || FeatureRegistry.UNIVERSAL_TOOLS.equals(
-                    feature.id
-            )) {
+            if (FeatureRegistry.UNIVERSAL_PRIVACY.equals(feature.id)
+                    || FeatureRegistry.UNIVERSAL_TOOLS.equals(feature.id)
+                    || "sms_sender".equals(feature.id)
+                    || "sms_code".equals(feature.id)) {
                 continue;
             }
-
-            root.addView(
-                    buildFeatureCard(feature),
-                    topMargin(dp(10))
-            );
+            root.addView(buildFeatureCard(feature), topMargin(dp(10)));
         }
 
         TextView footer = text(
