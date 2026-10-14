@@ -158,8 +158,14 @@ public final class SmsSenderHook implements HookModule {
     }
 
     private boolean looksLikeRecycler(View view) {
-        String name = view.getClass().getName();
-        return name.contains("RecyclerView") || name.contains("ListView");
+        // Google Messages can subclass RecyclerView under an obfuscated name.
+        for (Class<?> type = view.getClass(); type != null; type = type.getSuperclass()) {
+            String name = type.getName();
+            if (name.contains("RecyclerView") || name.contains("ListView")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void scanRow(View row, SharedPreferences cache) {
