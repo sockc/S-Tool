@@ -425,6 +425,12 @@ public final class FeatureRegistry {
                             "com.taobao.idlefish"
                     ),
                     feature(
+                            "sms_sender",
+                            "短信智能识别",
+                            "Google 信息：本地识别企业短信署名，名称替换列表号码（原号码仍在详情）",
+                            "com.google.android.apps.messaging"
+                    ),
+                    feature(
                             "sms_code",
                             "短信验证码",
                             "Google 信息验证码识别并复制到剪贴板",

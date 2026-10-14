@@ -47,7 +47,9 @@ public final class ConfigProvider extends ContentProvider {
     public static final String KEY_SCORE =
             "_score";
 
-    public static final int PROTOCOL_VERSION = 8;
+    public static final String METHOD_GET_SMS_OVERRIDES = "get_sms_overrides";
+
+    public static final int PROTOCOL_VERSION = 9;
 
     @Override
     public boolean onCreate() {
@@ -75,6 +77,15 @@ public final class ConfigProvider extends ContentProvider {
 
         if (METHOD_GET_ALL.equals(method)) {
             return buildConfigBundle();
+        }
+
+        if (METHOD_GET_SMS_OVERRIDES.equals(method)) {
+            Context context = getContext();
+            if (context == null || !callerOwnsPackage(
+                    context, "com.google.android.apps.messaging")) return new Bundle();
+            SharedPreferences prefs = context.getSharedPreferences(
+                    FeaturePrefs.PREF_FILE, Context.MODE_PRIVATE);
+            return SmsSenderOverrides.snapshot(prefs);
         }
 
         if (METHOD_REPORT_INJECTION.equals(method)) {
