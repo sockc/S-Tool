@@ -120,6 +120,10 @@ public final class SMainHook
                             "com.sockc.unicomhook.XianyuHook"
                     ),
                     new HookEntry(
+                            "sms_sender",
+                            "com.sockc.unicomhook.SmsSenderHook"
+                    ),
+                    new HookEntry(
                             "sms_code",
                             "com.sockc.unicomhook.SmsCodeHook"
                     ),

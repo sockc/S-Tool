@@ -1,7 +1,10 @@
 package com.sockc.unicomhook;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
+import android.text.InputType;
+import android.widget.EditText;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -153,7 +156,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "V1.4.4 · 通用开屏广告跳过",
+                "V1.4.5 · Google 信息企业短信识别",
                 14,
                 COLOR_SUBTEXT,
                 Typeface.NORMAL
@@ -256,25 +259,30 @@ public final class MainActivity extends Activity {
         );
 
         root.addView(
+                sectionTitle("短信增强"),
+                topMargin(dp(24))
+        );
+        for (String id : new String[]{"sms_sender", "sms_code"}) {
+            FeatureRegistry.Feature smsFeature = FeatureRegistry.findFeature(id);
+            if (smsFeature != null) {
+                root.addView(buildFeatureCard(smsFeature), topMargin(dp(10)));
+            }
+        }
+
+        root.addView(
                 sectionTitle("应用增强"),
                 topMargin(dp(24))
         );
 
         for (FeatureRegistry.Feature feature
                 : FeatureRegistry.all()) {
-            if (FeatureRegistry.UNIVERSAL_PRIVACY.equals(
-                    feature.id
-            )
-                    || FeatureRegistry.UNIVERSAL_TOOLS.equals(
-                    feature.id
-            )) {
+            if (FeatureRegistry.UNIVERSAL_PRIVACY.equals(feature.id)
+                    || FeatureRegistry.UNIVERSAL_TOOLS.equals(feature.id)
+                    || "sms_sender".equals(feature.id)
+                    || "sms_code".equals(feature.id)) {
                 continue;
             }
-
-            root.addView(
-                    buildFeatureCard(feature),
-                    topMargin(dp(10))
-            );
+            root.addView(buildFeatureCard(feature), topMargin(dp(10)));
         }
 
         TextView footer = text(
@@ -745,6 +753,17 @@ public final class MainActivity extends Activity {
                 summary,
                 topMargin(dp(10))
         );
+
+        if ("sms_sender".equals(feature.id)) {
+            Button labels = actionButton("管理号码备注");
+            labels.setOnClickListener(view -> openSmsSenderEditor());
+            card.addView(labels, topMargin(dp(10)));
+            TextView hint = text(
+                    "仅修改 Google 信息会话列表显示；识别结果不是官方认证。"
+                            + " 历史列表逐屏识别，添加备注后重启 Google 信息生效。",
+                    12, COLOR_SUBTEXT, Typeface.NORMAL);
+            card.addView(hint, topMargin(dp(6)));
+        }
 
         if ("sms_code".equals(
                 feature.id
@@ -1576,6 +1595,46 @@ public final class MainActivity extends Activity {
                                 }
                         )
         );
+    }
+
+    private void openSmsSenderEditor() {
+        LinearLayout fields = vertical();
+        fields.setPadding(dp(20), dp(12), dp(20), dp(4));
+        EditText number = new EditText(this);
+        number.setSingleLine(true);
+        number.setInputType(InputType.TYPE_CLASS_PHONE);
+        number.setHint("短信号码，例如 106852811933180");
+        fields.addView(number);
+        EditText label = new EditText(this);
+        label.setSingleLine(true);
+        label.setHint("显示名称，留空可删除已有备注");
+        fields.addView(label, topMargin(dp(8)));
+
+        new AlertDialog.Builder(this)
+                .setTitle("号码备注（优先于自动识别）")
+                .setMessage("仅保存在本机 S-Tool。保存或删除后重新打开 Google 信息生效。")
+                .setView(fields)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    String sender = SmsSenderRecognizer.normalizeSender(
+                            number.getText().toString());
+                    String name = label.getText().toString().trim();
+                    if (sender == null || (!name.isEmpty()
+                            && !SmsSenderRecognizer.validName(name))) {
+                        Toast.makeText(this, "号码或名称格式无效", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    SharedPreferences.Editor editor = preferences.edit();
+                    String key = SmsSenderOverrides.PREFIX + sender;
+                    if (name.isEmpty()) editor.remove(key);
+                    else editor.putString(key, name);
+                    editor.putLong(FeaturePrefs.KEY_LAST_CHANGED_AT,
+                            System.currentTimeMillis());
+                    Toast.makeText(this, editor.commit()
+                            ? "保存成功，请重启 Google 信息" : "保存失败",
+                            Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 
     private void openNotificationListenerSettings() {
